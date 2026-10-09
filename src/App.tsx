@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import AppShell from './components/layout/AppShell';
 import { StoreProvider } from './store/StoreContext';
 import { ParentAuthProvider } from './store/ParentAuth';
@@ -13,7 +13,7 @@ export default function App() {
   return (
     <StoreProvider>
       <ParentAuthProvider>
-        <BrowserRouter>
+        <HashRouter>
           <Routes>
             <Route element={<AppShell />}>
               <Route index element={<TodayPage />} />
@@ -25,7 +25,7 @@ export default function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
-        </BrowserRouter>
+        </HashRouter>
       </ParentAuthProvider>
     </StoreProvider>
   );
