@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Lock, LockOpen, NotebookPen } from 'lucide-react';
 import BottomNav from './BottomNav';
 import { useParentAuth } from '../../store/ParentAuth';
+import { useStore } from '../../store/StoreContext';
 
 /**
  * 앱 전체 레이아웃
@@ -10,6 +11,7 @@ import { useParentAuth } from '../../store/ParentAuth';
  */
 export default function AppShell() {
   const { unlocked } = useParentAuth();
+  const { syncing } = useStore();
   const { pathname } = useLocation();
   const inParent = pathname.startsWith('/parent');
 
@@ -25,18 +27,24 @@ export default function AppShell() {
             <span className="font-hand text-2xl font-bold leading-none tracking-tight">공부 노트</span>
           </Link>
 
-          <Link
-            to="/parent"
-            aria-label={unlocked ? '학부모 모드 (열림)' : '학부모 모드 (잠김)'}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors ${
-              inParent
-                ? 'bg-ink text-white'
-                : 'bg-slate-50 text-ink-soft hover:bg-slate-100 hover:text-ink'
-            }`}
-          >
-            {unlocked ? <LockOpen size={15} /> : <Lock size={15} />}
-            <span>학부모</span>
-          </Link>
+          <div className="flex items-center gap-2">
+            <span
+              title={syncing ? '클라우드와 동기화 중...' : '동기화 완료'}
+              className={`h-2 w-2 rounded-full transition-colors ${syncing ? 'animate-pulse bg-amber-400' : 'bg-emerald-400'}`}
+            />
+            <Link
+              to="/parent"
+              aria-label={unlocked ? '학부모 모드 (열림)' : '학부모 모드 (잠김)'}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors ${
+                inParent
+                  ? 'bg-ink text-white'
+                  : 'bg-slate-50 text-ink-soft hover:bg-slate-100 hover:text-ink'
+              }`}
+            >
+              {unlocked ? <LockOpen size={15} /> : <Lock size={15} />}
+              <span>학부모</span>
+            </Link>
+          </div>
         </header>
 
         {/* 본문: 공책 줄무늬 종이 */}
