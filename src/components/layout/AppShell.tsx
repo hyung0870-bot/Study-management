@@ -28,10 +28,17 @@ export default function AppShell() {
           </Link>
 
           <div className="flex items-center gap-2">
-            <span
-              title={syncing ? '클라우드와 동기화 중...' : '동기화 완료'}
-              className={`h-2 w-2 rounded-full transition-colors ${syncing ? 'animate-pulse bg-amber-400' : 'bg-emerald-400'}`}
-            />
+            <div
+              title={syncing ? '클라우드에 저장 중...' : '클라우드에 안전하게 저장됨'}
+              className="flex items-center gap-1.5 rounded-full bg-slate-50 px-2 py-1 text-xs text-ink-muted"
+            >
+              <span
+                className={`h-2 w-2 rounded-full transition-colors ${
+                  syncing ? 'animate-pulse bg-amber-400' : 'bg-emerald-400'
+                }`}
+              />
+              <span className="text-[11px] font-medium">{syncing ? '저장 중' : '저장됨'}</span>
+            </div>
             <Link
               to="/parent"
               aria-label={unlocked ? '학부모 모드 (열림)' : '학부모 모드 (잠김)'}

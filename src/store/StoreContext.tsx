@@ -65,6 +65,7 @@ function loadLocal(): AppData {
 interface StoreValue {
   data: AppData;
   syncing: boolean;
+  initialLoaded: boolean;
   update: (updater: (prev: AppData) => AppData) => void;
   updateDay: (key: WeekdayKey, updater: (prev: DaySchedule) => DaySchedule) => void;
   reset: () => void;
@@ -76,55 +77,154 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [data, setData] = useState<AppData>(loadLocal);
   const [syncing, setSyncing] = useState(false);
-  const savingRef = useRef(false);
+  const [initialLoaded, setInitialLoaded] = useState(false);
 
-  // 1) 로그인 상태면 Firestore 와 양방향 실시간 동기화
+  // Firestore 초기 로드가 완료되었는지 여부
+  const initialFetchDoneRef = useRef(false);
+  // 디바운스 타이머
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 1) Firestore -> Local 동기화 (최초 로드 및 타 기기 실시간 변경 수신 - 읽기 전용)
   useEffect(() => {
-    if (!user) return;
-    const ref = doc(db, 'users', user.uid);
+    if (!user) {
+      setInitialLoaded(true);
+      return;
+    }
+
     setSyncing(true);
+    initialFetchDoneRef.current = false;
+    const ref = doc(db, 'users', user.uid);
+
+    // 네트워크 지연/오프라인 대비 타임아웃 (3초)
+    const fallbackTimer = setTimeout(() => {
+      if (!initialFetchDoneRef.current) {
+        initialFetchDoneRef.current = true;
+        setInitialLoaded(true);
+        setSyncing(false);
+      }
+    }, 3000);
+
     const unsub = onSnapshot(
       ref,
       (snap) => {
+        clearTimeout(fallbackTimer);
         setSyncing(false);
+        initialFetchDoneRef.current = true;
+        setInitialLoaded(true);
+
         if (snap.exists()) {
+          // 클라우드 데이터가 존재하면 로컬에 덮어씌움 (클라우드가 최우선 기준)
           const remote = sanitize(snap.data());
           setData(remote);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
         } else {
-          // 첫 로그인: 현재 로컬 데이터를 클라우드에 최초 업로드
-          setDoc(ref, data, { merge: true }).catch(() => {});
+          // 신규 가입자(문서 미존재): 기본 데이터로 최초 1회 생성
+          const initial = loadLocal();
+          setDoc(ref, initial, { merge: true }).catch(console.error);
         }
       },
-      () => setSyncing(false),
+      (error) => {
+        console.error('Firestore snapshot error:', error);
+        clearTimeout(fallbackTimer);
+        initialFetchDoneRef.current = true;
+        setInitialLoaded(true);
+        setSyncing(false);
+      },
     );
-    return () => unsub();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    return () => {
+      clearTimeout(fallbackTimer);
+      unsub();
+    };
   }, [user?.uid]);
 
-  // 2) 데이터가 바뀌면 LocalStorage + (로그인 시) Firestore 에 저장 (디바운스)
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    if (!user) return;
-    savingRef.current = true;
-    const t = setTimeout(() => {
-      const ref = doc(db, 'users', user.uid);
-      setDoc(ref, data).finally(() => {
-        savingRef.current = false;
-      });
-    }, 250);
-    return () => clearTimeout(t);
-  }, [data, user]);
+  // 2) 클라우드 저장 함수 (오직 사용자가 변경/저장을 눌렀을 때만 호출)
+  const persistToCloud = useCallback(
+    (nextData: AppData) => {
+      // 로컬 스토리지 즉시 캐시
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
 
-  const update = useCallback((updater: (prev: AppData) => AppData) => setData(updater), []);
-  const updateDay = useCallback(
-    (key: WeekdayKey, updater: (prev: DaySchedule) => DaySchedule) =>
-      setData((prev) => ({ ...prev, week: { ...prev.week, [key]: updater(prev.week[key]) } })),
-    [],
+      if (!user) return;
+      // 초기 클라우드 데이터 로딩 전에는 쓰기 작업 절대 금지 (덮어쓰기 원천 차단)
+      if (!initialFetchDoneRef.current) return;
+
+      setSyncing(true);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      saveTimeoutRef.current = setTimeout(async () => {
+        try {
+          const ref = doc(db, 'users', user.uid);
+          await setDoc(ref, nextData);
+        } catch (err) {
+          console.error('클라우드 저장 실패:', err);
+        } finally {
+          setSyncing(false);
+        }
+      }, 350);
+    },
+    [user],
   );
-  const reset = useCallback(() => setData(createDefaultData()), []);
 
-  return <StoreContext.Provider value={{ data, syncing, update, updateDay, reset }}>{children}</StoreContext.Provider>;
+  // 3) 사용자 변경 트리거 (update, updateDay, reset)
+  const update = useCallback(
+    (updater: (prev: AppData) => AppData) => {
+      setData((prev) => {
+        const next = updater(prev);
+        persistToCloud(next);
+        return next;
+      });
+    },
+    [persistToCloud],
+  );
+
+  const updateDay = useCallback(
+    (key: WeekdayKey, updater: (prev: DaySchedule) => DaySchedule) => {
+      setData((prev) => {
+        const next = {
+          ...prev,
+          week: {
+            ...prev.week,
+            [key]: updater(prev.week[key]),
+          },
+        };
+        persistToCloud(next);
+        return next;
+      });
+    },
+    [persistToCloud],
+  );
+
+  const reset = useCallback(() => {
+    const defaultData = createDefaultData();
+    setData(defaultData);
+    persistToCloud(defaultData);
+  }, [persistToCloud]);
+
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  if (!initialLoaded && user) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-paper font-hand text-xl text-ink-soft">
+        <span className="animate-spin text-3xl">⏳</span>
+        <span>클라우드에서 일정을 안전하게 불러오는 중...</span>
+      </div>
+    );
+  }
+
+  return (
+    <StoreContext.Provider value={{ data, syncing, initialLoaded, update, updateDay, reset }}>
+      {children}
+    </StoreContext.Provider>
+  );
 }
 
 export function useStore(): StoreValue {
