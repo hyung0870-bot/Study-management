@@ -5,8 +5,13 @@ import { useParentAuth } from '../../store/ParentAuth';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'] as const;
 
+interface PinGateProps {
+  onSuccess?: () => void;
+  isModal?: boolean;
+}
+
 /** 4자리 PIN 입력 화면 */
-export default function PinGate() {
+export default function PinGate({ onSuccess, isModal = false }: PinGateProps = {}) {
   const { data } = useStore();
   const { unlock } = useParentAuth();
   const [pin, setPin] = useState('');
@@ -23,12 +28,13 @@ export default function PinGate() {
     if (pin.length !== 4) return;
     if (pin === data.parentPin) {
       unlock();
+      onSuccess?.();
     } else {
       setError(true);
       const t = setTimeout(() => setPin(''), 450);
       return () => clearTimeout(t);
     }
-  }, [pin, data.parentPin, unlock]);
+  }, [pin, data.parentPin, unlock, onSuccess]);
 
   // 키보드 입력 지원 (PC)
   useEffect(() => {
@@ -41,11 +47,15 @@ export default function PinGate() {
   });
 
   return (
-    <div className="animate-pop flex flex-col items-center pt-6">
-      <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-ink text-white shadow-soft">
-        <Lock size={28} />
-      </span>
-      <h1 className="font-hand text-3xl font-bold">학부모 모드</h1>
+    <div className={`animate-pop flex flex-col items-center ${isModal ? 'pt-2 pb-4' : 'pt-6'}`}>
+      {!isModal && (
+        <>
+          <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-ink text-white shadow-soft">
+            <Lock size={28} />
+          </span>
+          <h1 className="font-hand text-3xl font-bold">학부모 모드</h1>
+        </>
+      )}
       <p className="mt-1 text-sm text-ink-soft">비밀번호 4자리를 입력해 주세요</p>
 
       <div className={`my-7 flex gap-4 ${error ? 'animate-shake' : ''}`}>

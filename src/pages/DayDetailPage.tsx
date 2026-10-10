@@ -6,6 +6,7 @@ import {
   BookOpen,
   Copy,
   GraduationCap,
+  Lock,
   Moon,
   Plus,
   School,
@@ -16,9 +17,11 @@ import MiniTimeline from '../components/planner/MiniTimeline';
 import StudySheet, { type StudyDraft } from '../components/planner/StudySheet';
 import RangeSheet, { type RangeDraft } from '../components/planner/RangeSheet';
 import CopyDaySheet from '../components/planner/CopyDaySheet';
+import PinGateModal from '../components/parent/PinGateModal';
 import { AddButton, Section, Switch } from '../components/ui/Controls';
 import { TimeRangeInput } from '../components/ui/Inputs';
 import { useStore } from '../store/StoreContext';
+import { useParentAuth } from '../store/ParentAuth';
 import { uid, WEEKDAYS, weekdayKeyOf } from '../lib/date';
 import { buildBlocks, byStart, findConflicts, totalStudyMin } from '../lib/schedule';
 import { FIXED_COLORS, tint } from '../lib/colors';
@@ -43,8 +46,10 @@ const cloneDay = (d: DaySchedule): DaySchedule => ({
 export default function DayDetailPage() {
   const { day: dayParam } = useParams();
   const { data, update, updateDay } = useStore();
+  const { unlocked } = useParentAuth();
   const [sheet, setSheet] = useState<SheetState>(null);
   const [copyOpen, setCopyOpen] = useState(false);
+  const [pinOpen, setPinOpen] = useState(false);
   const [toast, setToast] = useState('');
 
   const weekday = WEEKDAYS.find((w) => w.key === dayParam);
@@ -71,7 +76,8 @@ export default function DayDetailPage() {
   const editingId = sheet?.item?.id;
   const otherBlocks = blocks.filter((b) => b.id !== editingId);
 
-  const saveStudy = (v: StudyDraft) =>
+  const saveStudy = (v: StudyDraft) => {
+    if (!unlocked) return;
     set((d) => ({
       ...d,
       studies:
@@ -79,8 +85,10 @@ export default function DayDetailPage() {
           ? d.studies.map((s) => (s.id === sheet.item!.id ? { ...s, ...v } : s))
           : [...d.studies, { id: uid(), ...v }],
     }));
+  };
 
-  const saveRange = (field: 'academies' | 'etc') => (v: RangeDraft) =>
+  const saveRange = (field: 'academies' | 'etc') => (v: RangeDraft) => {
+    if (!unlocked) return;
     set((d) => ({
       ...d,
       [field]:
@@ -88,11 +96,15 @@ export default function DayDetailPage() {
           ? d[field].map((x) => (x.id === sheet.item!.id ? { ...x, ...v } : x))
           : [...d[field], { id: uid(), ...v }],
     }));
+  };
 
-  const removeItem = (field: 'studies' | 'academies' | 'etc', id: string) =>
+  const removeItem = (field: 'studies' | 'academies' | 'etc', id: string) => {
+    if (!unlocked) return;
     set((d) => ({ ...d, [field]: (d[field] as { id: string }[]).filter((x) => x.id !== id) }));
+  };
 
   const copyTo = (targets: WeekdayKey[]) => {
+    if (!unlocked) return;
     update((prev) => {
       const week = { ...prev.week };
       targets.forEach((t) => (week[t] = cloneDay(prev.week[key])));
@@ -110,7 +122,7 @@ export default function DayDetailPage() {
 
   return (
     <>
-      {/* 상단: 뒤로가기 + 요일 + 복사 */}
+      {/* 상단: 뒤로가기 + 요일 + 복사/모드전환 */}
       <div className="mb-3 flex items-center gap-2">
         <Link to="/planner" aria-label="주간 계획으로" className="-ml-2 rounded-full p-2 text-ink-soft hover:bg-slate-100">
           <ArrowLeft size={22} />
@@ -119,9 +131,19 @@ export default function DayDetailPage() {
           <span className="marker">{weekday.label}</span>
         </h1>
         {key === todayKey && <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-white">오늘</span>}
-        <button type="button" onClick={() => setCopyOpen(true)} className="btn-ghost ml-auto !px-3 !py-1.5 !text-xs">
-          <Copy size={14} /> 복사
-        </button>
+        {unlocked ? (
+          <button type="button" onClick={() => setCopyOpen(true)} className="btn-ghost ml-auto !px-3 !py-1.5 !text-xs">
+            <Copy size={14} /> 복사
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPinOpen(true)}
+            className="ml-auto flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs text-ink-soft hover:bg-slate-200"
+          >
+            <Lock size={13} /> 학부모 모드로 전환
+          </button>
+        )}
       </div>
 
       {/* 요일 전환 */}
@@ -139,6 +161,23 @@ export default function DayDetailPage() {
           </Link>
         ))}
       </div>
+
+      {/* 학생 모드 안내 배너 */}
+      {!unlocked && (
+        <div className="mb-4 flex items-center justify-between rounded-2xl border border-amber-200/50 bg-amber-50/70 p-3 text-xs text-amber-900">
+          <div className="flex items-center gap-2">
+            <Lock size={15} className="shrink-0 text-amber-600" />
+            <span>학생 모드: 요일별 일정을 <b>확인</b>만 할 수 있어요.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPinOpen(true)}
+            className="ml-2 shrink-0 font-bold text-accent hover:underline"
+          >
+            수정하기
+          </button>
+        </div>
+      )}
 
       {/* 하루 미리보기 */}
       <div className="paper-card mb-4 p-4">
@@ -166,13 +205,17 @@ export default function DayDetailPage() {
           color="#5b8def"
           title="공부 계획"
           right={
-            <AddButton onClick={() => setSheet({ type: 'study', item: null })}>
-              <Plus size={14} /> 추가
-            </AddButton>
+            unlocked ? (
+              <AddButton onClick={() => setSheet({ type: 'study', item: null })}>
+                <Plus size={14} /> 추가
+              </AddButton>
+            ) : undefined
           }
         >
           {studies.length === 0 ? (
-            <p className="text-sm text-ink-soft/80">과목과 시작·끝 시간을 정해 보세요. 원형 시간표에 바로 나타나요!</p>
+            <p className="text-sm text-ink-soft/80">
+              {unlocked ? '과목과 시작·끝 시간을 정해 보세요. 원형 시간표에 바로 나타나요!' : '등록된 공부 계획이 없어요.'}
+            </p>
           ) : (
             <ul className="space-y-2">
               {studies.map((s) => {
@@ -188,7 +231,7 @@ export default function DayDetailPage() {
                     start={s.start}
                     end={s.end}
                     conflict={conflicts.has(s.id)}
-                    onClick={() => setSheet({ type: 'study', item: s })}
+                    onClick={unlocked ? () => setSheet({ type: 'study', item: s }) : undefined}
                   />
                 );
               })}
@@ -202,24 +245,44 @@ export default function DayDetailPage() {
           color={FIXED_COLORS.school}
           title="학교"
           right={
-            <Switch
-              label="학교 가는 날"
-              checked={!!day.school}
-              onChange={(on) => set((d) => ({ ...d, school: on ? { start: '08:30', end: '14:30' } : null }))}
-            />
+            unlocked ? (
+              <Switch
+                label="학교 가는 날"
+                checked={!!day.school}
+                onChange={(on) => set((d) => ({ ...d, school: on ? { start: '08:30', end: '14:30' } : null }))}
+              />
+            ) : day.school ? (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-600">가는 날</span>
+            ) : undefined
           }
         >
           {day.school ? (
-            <>
-              <TimeRangeInput
-                start={day.school.start}
-                end={day.school.end}
-                startLabel="등교"
-                endLabel="하교"
-                onChange={(start, end) => set((d) => ({ ...d, school: { start, end } }))}
-              />
-              {conflicts.has('school') && <ConflictText />}
-            </>
+            unlocked ? (
+              <>
+                <TimeRangeInput
+                  start={day.school.start}
+                  end={day.school.end}
+                  startLabel="등교"
+                  endLabel="하교"
+                  onChange={(start, end) => set((d) => ({ ...d, school: { start, end } }))}
+                />
+                {conflicts.has('school') && <ConflictText />}
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between rounded-2xl bg-white/60 px-3.5 py-2.5 ring-1 ring-slate-200/60">
+                  <div className="flex items-center gap-2 text-sm font-bold text-ink">
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-ink-soft">등교</span>
+                    <span>{formatTime(day.school.start)}</span>
+                    <span className="font-normal text-ink-soft">~</span>
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-ink-soft">하교</span>
+                    <span>{formatTime(day.school.end)}</span>
+                  </div>
+                  <span className="text-xs text-ink-soft">⏱ {formatDuration(durationMin(day.school.start, day.school.end))}</span>
+                </div>
+                {conflicts.has('school') && <ConflictText />}
+              </>
+            )
           ) : (
             <p className="text-sm text-ink-soft/80">학교 안 가는 날이에요</p>
           )}
@@ -231,9 +294,11 @@ export default function DayDetailPage() {
           color={FIXED_COLORS.academy}
           title="학원"
           right={
-            <AddButton onClick={() => setSheet({ type: 'academy', item: null })}>
-              <Plus size={14} /> 추가
-            </AddButton>
+            unlocked ? (
+              <AddButton onClick={() => setSheet({ type: 'academy', item: null })}>
+                <Plus size={14} /> 추가
+              </AddButton>
+            ) : undefined
           }
         >
           {academies.length === 0 ? (
@@ -248,7 +313,7 @@ export default function DayDetailPage() {
                   start={a.start}
                   end={a.end}
                   conflict={conflicts.has(a.id)}
-                  onClick={() => setSheet({ type: 'academy', item: a })}
+                  onClick={unlocked ? () => setSheet({ type: 'academy', item: a }) : undefined}
                 />
               ))}
             </ul>
@@ -261,24 +326,44 @@ export default function DayDetailPage() {
           color={FIXED_COLORS.sleep}
           title="잠자는 시간"
           right={
-            <Switch
-              label="잠자는 시간 설정"
-              checked={!!day.sleep}
-              onChange={(on) => set((d) => ({ ...d, sleep: on ? { start: '22:00', end: '07:00' } : null }))}
-            />
+            unlocked ? (
+              <Switch
+                label="잠자는 시간 설정"
+                checked={!!day.sleep}
+                onChange={(on) => set((d) => ({ ...d, sleep: on ? { start: '22:00', end: '07:00' } : null }))}
+              />
+            ) : day.sleep ? (
+              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-600">설정됨</span>
+            ) : undefined
           }
         >
           {day.sleep ? (
-            <>
-              <TimeRangeInput
-                start={day.sleep.start}
-                end={day.sleep.end}
-                startLabel="취침"
-                endLabel="기상"
-                onChange={(start, end) => set((d) => ({ ...d, sleep: { start, end } }))}
-              />
-              {conflicts.has('sleep') && <ConflictText />}
-            </>
+            unlocked ? (
+              <>
+                <TimeRangeInput
+                  start={day.sleep.start}
+                  end={day.sleep.end}
+                  startLabel="취침"
+                  endLabel="기상"
+                  onChange={(start, end) => set((d) => ({ ...d, sleep: { start, end } }))}
+                />
+                {conflicts.has('sleep') && <ConflictText />}
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between rounded-2xl bg-white/60 px-3.5 py-2.5 ring-1 ring-slate-200/60">
+                  <div className="flex items-center gap-2 text-sm font-bold text-ink">
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-ink-soft">취침</span>
+                    <span>{formatTime(day.sleep.start)}</span>
+                    <span className="font-normal text-ink-soft">~</span>
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-ink-soft">기상</span>
+                    <span>{formatTime(day.sleep.end)}</span>
+                  </div>
+                  <span className="text-xs text-ink-soft">⏱ {formatDuration(durationMin(day.sleep.start, day.sleep.end))}</span>
+                </div>
+                {conflicts.has('sleep') && <ConflictText />}
+              </>
+            )
           ) : (
             <p className="text-sm text-ink-soft/80">잠자는 시간을 설정하지 않았어요</p>
           )}
@@ -290,13 +375,17 @@ export default function DayDetailPage() {
           color={FIXED_COLORS.etc}
           title="기타 일정"
           right={
-            <AddButton onClick={() => setSheet({ type: 'etc', item: null })}>
-              <Plus size={14} /> 추가
-            </AddButton>
+            unlocked ? (
+              <AddButton onClick={() => setSheet({ type: 'etc', item: null })}>
+                <Plus size={14} /> 추가
+              </AddButton>
+            ) : undefined
           }
         >
           {etc.length === 0 ? (
-            <p className="text-sm text-ink-soft/80">저녁 식사, 운동, 놀이 시간 등을 넣을 수 있어요</p>
+            <p className="text-sm text-ink-soft/80">
+              {unlocked ? '저녁 식사, 운동, 놀이 시간 등을 넣을 수 있어요' : '기타 일정이 없어요'}
+            </p>
           ) : (
             <ul className="space-y-2">
               {etc.map((e) => (
@@ -307,7 +396,7 @@ export default function DayDetailPage() {
                   start={e.start}
                   end={e.end}
                   conflict={conflicts.has(e.id)}
-                  onClick={() => setSheet({ type: 'etc', item: e })}
+                  onClick={unlocked ? () => setSheet({ type: 'etc', item: e }) : undefined}
                 />
               ))}
             </ul>
@@ -315,42 +404,61 @@ export default function DayDetailPage() {
         </Section>
       </div>
 
-      <p className="mt-5 text-center text-xs leading-8 text-ink-soft">입력한 내용은 자동으로 저장돼요 💾</p>
+      {unlocked ? (
+        <p className="mt-5 text-center text-xs leading-8 text-ink-soft">입력한 내용은 자동으로 저장돼요 💾</p>
+      ) : (
+        <div className="mt-5 flex flex-col items-center gap-1.5 text-center text-xs text-ink-soft">
+          <p>💡 일정을 변경하거나 추가하려면 학부모 모드가 필요해요.</p>
+          <button
+            type="button"
+            onClick={() => setPinOpen(true)}
+            className="font-bold text-accent underline hover:opacity-80"
+          >
+            학부모 모드로 전환하여 수정하기
+          </button>
+        </div>
+      )}
 
-      {/* 시트들 */}
-      <StudySheet
-        open={sheet?.type === 'study'}
-        initial={sheet?.type === 'study' ? sheet.item : null}
-        defaults={nextSlot(30)}
-        subjects={data.subjects}
-        otherBlocks={otherBlocks}
-        onSave={saveStudy}
-        onDelete={sheet?.type === 'study' && sheet.item ? () => removeItem('studies', sheet.item!.id) : undefined}
-        onClose={() => setSheet(null)}
-      />
-      <RangeSheet
-        open={sheet?.type === 'academy'}
-        kindLabel="학원"
-        placeholder="예: 영어학원, 태권도"
-        initial={sheet?.type === 'academy' ? sheet.item : null}
-        defaults={nextSlot(60)}
-        otherBlocks={otherBlocks}
-        onSave={saveRange('academies')}
-        onDelete={sheet?.type === 'academy' && sheet.item ? () => removeItem('academies', sheet.item!.id) : undefined}
-        onClose={() => setSheet(null)}
-      />
-      <RangeSheet
-        open={sheet?.type === 'etc'}
-        kindLabel="기타 일정"
-        placeholder="예: 저녁 식사, 줄넘기"
-        initial={sheet?.type === 'etc' ? sheet.item : null}
-        defaults={nextSlot(60)}
-        otherBlocks={otherBlocks}
-        onSave={saveRange('etc')}
-        onDelete={sheet?.type === 'etc' && sheet.item ? () => removeItem('etc', sheet.item!.id) : undefined}
-        onClose={() => setSheet(null)}
-      />
-      <CopyDaySheet open={copyOpen} source={key} onCopy={copyTo} onClose={() => setCopyOpen(false)} />
+      {/* 시트들 (학부모 모드에서만 동작) */}
+      {unlocked && (
+        <>
+          <StudySheet
+            open={sheet?.type === 'study'}
+            initial={sheet?.type === 'study' ? sheet.item : null}
+            defaults={nextSlot(30)}
+            subjects={data.subjects}
+            otherBlocks={otherBlocks}
+            onSave={saveStudy}
+            onDelete={sheet?.type === 'study' && sheet.item ? () => removeItem('studies', sheet.item!.id) : undefined}
+            onClose={() => setSheet(null)}
+          />
+          <RangeSheet
+            open={sheet?.type === 'academy'}
+            kindLabel="학원"
+            placeholder="예: 영어학원, 태권도"
+            initial={sheet?.type === 'academy' ? sheet.item : null}
+            defaults={nextSlot(60)}
+            otherBlocks={otherBlocks}
+            onSave={saveRange('academies')}
+            onDelete={sheet?.type === 'academy' && sheet.item ? () => removeItem('academies', sheet.item!.id) : undefined}
+            onClose={() => setSheet(null)}
+          />
+          <RangeSheet
+            open={sheet?.type === 'etc'}
+            kindLabel="기타 일정"
+            placeholder="예: 저녁 식사, 줄넘기"
+            initial={sheet?.type === 'etc' ? sheet.item : null}
+            defaults={nextSlot(60)}
+            otherBlocks={otherBlocks}
+            onSave={saveRange('etc')}
+            onDelete={sheet?.type === 'etc' && sheet.item ? () => removeItem('etc', sheet.item!.id) : undefined}
+            onClose={() => setSheet(null)}
+          />
+          <CopyDaySheet open={copyOpen} source={key} onCopy={copyTo} onClose={() => setCopyOpen(false)} />
+        </>
+      )}
+
+      <PinGateModal open={pinOpen} onClose={() => setPinOpen(false)} />
 
       {toast && (
         <div className="animate-pop fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-sm text-white shadow-paper">
@@ -386,14 +494,17 @@ function ItemRow({
   start: string;
   end: string;
   conflict?: boolean;
-  onClick: () => void;
+  onClick?: () => void;
 }) {
+  const isClickable = !!onClick;
+  const Comp = isClickable ? 'button' : 'div';
   return (
     <li>
-      <button
-        type="button"
-        onClick={onClick}
-        className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors hover:brightness-[0.98]"
+      <Comp
+        {...(isClickable ? { type: 'button' as const, onClick } : {})}
+        className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors ${
+          isClickable ? 'hover:brightness-[0.98] cursor-pointer' : 'cursor-default'
+        }`}
         style={{ backgroundColor: tint(color, 0.1) }}
       >
         <span className="h-9 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
@@ -411,7 +522,7 @@ function ItemRow({
             {conflict ? <span className="text-amber-600">⚠ 시간 겹침</span> : formatDuration(durationMin(start, end))}
           </p>
         </div>
-      </button>
+      </Comp>
     </li>
   );
 }

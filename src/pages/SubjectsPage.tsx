@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Pencil, Plus, Trash2, BookMarked, GraduationCap, Sparkles } from 'lucide-react';
+import { Pencil, Plus, Trash2, BookMarked, GraduationCap, Sparkles, Lock } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import SubjectSheet from '../components/subjects/SubjectSheet';
 import WeekMinutesGrid from '../components/subjects/WeekMinutesGrid';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import PinGateModal from '../components/parent/PinGateModal';
 import { useStore } from '../store/StoreContext';
+import { useParentAuth } from '../store/ParentAuth';
 import { tint } from '../lib/colors';
 import { uid, WEEKDAYS } from '../lib/date';
 import { activitiesOf, subjectWeekMinutes, sumWeek, type WeekMinutes } from '../lib/schedule';
@@ -17,9 +19,11 @@ const EMPTY: WeekMinutes = { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, sun
 /** [A] 학습 항목(과목) 관리 + 학원·활동 현황 */
 export default function SubjectsPage() {
   const { data, update } = useStore();
+  const { unlocked } = useParentAuth();
   const [editing, setEditing] = useState<Subject | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [deleting, setDeleting] = useState<Subject | null>(null);
+  const [pinOpen, setPinOpen] = useState(false);
 
   const subMin = useMemo(() => subjectWeekMinutes(data.week), [data.week]);
   const activities = useMemo(() => activitiesOf(data.week), [data.week]);
@@ -27,19 +31,23 @@ export default function SubjectsPage() {
   const actTotal = activities.reduce((n, a) => n + sumWeek(a.minutes), 0);
 
   const openNew = () => {
+    if (!unlocked) return;
     setEditing(null);
     setSheetOpen(true);
   };
 
-  const save = ({ name, color }: { name: string; color: string }) =>
+  const save = ({ name, color }: { name: string; color: string }) => {
+    if (!unlocked) return;
     update((prev) => ({
       ...prev,
       subjects: editing
         ? prev.subjects.map((s) => (s.id === editing.id ? { ...s, name, color } : s))
         : [...prev.subjects, { id: uid(), name, color }],
     }));
+  };
 
-  const remove = (subject: Subject) =>
+  const remove = (subject: Subject) => {
+    if (!unlocked) return;
     update((prev) => {
       const week = { ...prev.week };
       for (const w of WEEKDAYS)
@@ -47,6 +55,7 @@ export default function SubjectsPage() {
       // 지난 기록(records)은 스냅샷이므로 그대로 보존
       return { ...prev, week, subjects: prev.subjects.filter((s) => s.id !== subject.id) };
     });
+  };
 
   const deletingCount = deleting
     ? WEEKDAYS.reduce((n, w) => n + data.week[w.key].studies.filter((s) => s.subjectId === deleting.id).length, 0)
@@ -58,23 +67,57 @@ export default function SubjectsPage() {
         title="과목 관리"
         subtitle={`주간 공부 ${formatDuration(studyTotal)} · 학원/활동 ${formatDuration(actTotal)}`}
         right={
-          <button type="button" className="btn-primary !px-3.5 !py-2" onClick={openNew}>
-            <Plus size={18} /> 추가
-          </button>
+          unlocked ? (
+            <button type="button" className="btn-primary !px-3.5 !py-2" onClick={openNew}>
+              <Plus size={18} /> 추가
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPinOpen(true)}
+              className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs text-ink-soft hover:bg-slate-200"
+            >
+              <Lock size={13} /> 학부모 모드로 전환
+            </button>
+          )
         }
       />
+
+      {/* 학생 모드 안내 배너 */}
+      {!unlocked && (
+        <div className="mb-4 flex items-center justify-between rounded-2xl border border-amber-200/50 bg-amber-50/70 p-3 text-xs text-amber-900">
+          <div className="flex items-center gap-2">
+            <Lock size={15} className="shrink-0 text-amber-600" />
+            <span>학생 모드: 과목 목록을 <b>확인</b>만 할 수 있어요.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPinOpen(true)}
+            className="ml-2 shrink-0 font-bold text-accent hover:underline"
+          >
+            수정하기
+          </button>
+        </div>
+      )}
 
       {/* ---- 공부 과목 ---- */}
       <h2 className="mb-2 font-hand text-2xl font-bold">📘 공부 과목</h2>
       {data.subjects.length === 0 ? (
-        <button
-          type="button"
-          onClick={openNew}
-          className="paper-card flex w-full flex-col items-center gap-2 border-dashed py-10 text-ink-soft"
-        >
-          <BookMarked size={32} />
-          <span className="font-hand text-xl">첫 번째 과목을 추가해 볼까요?</span>
-        </button>
+        unlocked ? (
+          <button
+            type="button"
+            onClick={openNew}
+            className="paper-card flex w-full flex-col items-center gap-2 border-dashed py-10 text-ink-soft"
+          >
+            <BookMarked size={32} />
+            <span className="font-hand text-xl">첫 번째 과목을 추가해 볼까요?</span>
+          </button>
+        ) : (
+          <div className="paper-card flex w-full flex-col items-center gap-2 border-dashed py-10 text-ink-soft">
+            <BookMarked size={32} />
+            <span className="font-hand text-xl">등록된 과목이 없어요</span>
+          </div>
+        )
       ) : (
         <ul className="space-y-3">
           {data.subjects.map((s, i) => (
@@ -91,25 +134,29 @@ export default function SubjectsPage() {
                   {s.name.slice(0, 1)}
                 </span>
                 <p className="min-w-0 flex-1 truncate font-hand text-[22px] font-bold">{s.name}</p>
-                <button
-                  type="button"
-                  aria-label={`${s.name} 수정`}
-                  className="rounded-full p-2 text-ink-soft hover:bg-slate-100 hover:text-ink"
-                  onClick={() => {
-                    setEditing(s);
-                    setSheetOpen(true);
-                  }}
-                >
-                  <Pencil size={17} />
-                </button>
-                <button
-                  type="button"
-                  aria-label={`${s.name} 삭제`}
-                  className="rounded-full p-2 text-ink-soft hover:bg-rose-50 hover:text-rose-500"
-                  onClick={() => setDeleting(s)}
-                >
-                  <Trash2 size={17} />
-                </button>
+                {unlocked && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label={`${s.name} 수정`}
+                      className="rounded-full p-2 text-ink-soft hover:bg-slate-100 hover:text-ink"
+                      onClick={() => {
+                        setEditing(s);
+                        setSheetOpen(true);
+                      }}
+                    >
+                      <Pencil size={17} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`${s.name} 삭제`}
+                      className="rounded-full p-2 text-ink-soft hover:bg-rose-50 hover:text-rose-500"
+                      onClick={() => setDeleting(s)}
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </>
+                )}
               </div>
               <div className="px-3 pb-3 pt-2">
                 <WeekMinutesGrid minutes={subMin[s.id] ?? EMPTY} color={s.color} />
@@ -156,29 +203,35 @@ export default function SubjectsPage() {
         </ul>
       )}
 
-      <SubjectSheet
-        open={sheetOpen}
-        initial={editing}
-        existingNames={data.subjects.map((s) => s.name)}
-        onSave={save}
-        onClose={() => setSheetOpen(false)}
-      />
+      {unlocked && (
+        <>
+          <SubjectSheet
+            open={sheetOpen}
+            initial={editing}
+            existingNames={data.subjects.map((s) => s.name)}
+            onSave={save}
+            onClose={() => setSheetOpen(false)}
+          />
 
-      <ConfirmDialog
-        open={!!deleting}
-        title="과목 삭제"
-        message={
-          deleting
-            ? `'${deleting.name}' 과목을 삭제할까요?` +
-              (deletingCount ? `\n주간 계획에 있는 ${deletingCount}개의 공부 일정도 함께 지워져요.` : '') +
-              '\n(지난 학습 기록은 그대로 남아요)'
-            : ''
-        }
-        confirmLabel="삭제"
-        danger
-        onConfirm={() => deleting && remove(deleting)}
-        onClose={() => setDeleting(null)}
-      />
+          <ConfirmDialog
+            open={!!deleting}
+            title="과목 삭제"
+            message={
+              deleting
+                ? `'${deleting.name}' 과목을 삭제할까요?` +
+                  (deletingCount ? `\n주간 계획에 있는 ${deletingCount}개의 공부 일정도 함께 지워져요.` : '') +
+                  '\n(지난 학습 기록은 그대로 남아요)'
+                : ''
+            }
+            confirmLabel="삭제"
+            danger
+            onConfirm={() => deleting && remove(deleting)}
+            onClose={() => setDeleting(null)}
+          />
+        </>
+      )}
+
+      <PinGateModal open={pinOpen} onClose={() => setPinOpen(false)} />
     </>
   );
 }

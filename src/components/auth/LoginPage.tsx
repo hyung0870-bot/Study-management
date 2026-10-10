@@ -42,10 +42,10 @@ export default function LoginPage() {
         setError('이미 가입된 이메일이에요. 로그인해 주세요');
       } else if (code === 'auth/invalid-email') {
         setError('올바른 이메일 형식이 아니에요');
-      } else if (code === 'auth/operation-not-allowed') {
-        setError('Firebase 콘솔에서 Email/Password 인증을 켜 주세요');
+      } else if (code === 'auth/operation-not-allowed' || code === 'auth/configuration-not-found') {
+        setError('Firebase 콘솔에서 Authentication 시작 및 이메일/비밀번호 로그인을 활성화해 주세요');
       } else {
-        setError('로그인 중 문제가 생겼어요. 다시 시도해 주세요');
+        setError(`로그인 중 문제가 생겼어요 (${code || '오류'}). 다시 시도해 주세요`);
       }
     } finally {
       setLoading(false);

@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Pencil } from 'lucide-react';
+import { CalendarRange, Pencil } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import CircularTimetable from '../components/timetable/CircularTimetable';
 import { useStore } from '../store/StoreContext';
+import { useParentAuth } from '../store/ParentAuth';
 import { WEEKDAYS, formatKoreanDate, weekdayKeyOf } from '../lib/date';
 import { buildBlocks, byStart, KIND_LABEL, type BlockKind } from '../lib/schedule';
 import { FIXED_COLORS, tint } from '../lib/colors';
@@ -13,6 +14,7 @@ import type { WeekdayKey } from '../types';
 /** [D] 24시간 원형 시간표 */
 export default function TimetablePage() {
   const { data } = useStore();
+  const { unlocked } = useParentAuth();
   const todayKey = weekdayKeyOf(new Date());
   const [dayKey, setDayKey] = useState<WeekdayKey>(todayKey);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -51,7 +53,15 @@ export default function TimetablePage() {
         subtitle={isToday ? formatKoreanDate(new Date()) : WEEKDAYS.find((w) => w.key === dayKey)!.label}
         right={
           <Link to={`/planner/${dayKey}`} className="btn-ghost !px-3 !py-2 !text-xs">
-            <Pencil size={14} /> 수정
+            {unlocked ? (
+              <>
+                <Pencil size={14} /> 수정
+              </>
+            ) : (
+              <>
+                <CalendarRange size={14} /> 계획 확인
+              </>
+            )}
           </Link>
         }
       />
@@ -97,7 +107,9 @@ export default function TimetablePage() {
       {/* 시간 순서 목록 */}
       {list.length === 0 ? (
         <Link to={`/planner/${dayKey}`} className="paper-card block py-8 text-center text-sm text-ink-soft">
-          아직 일정이 없어요. 주간 계획에서 추가해 보세요 →
+          {unlocked
+            ? '아직 일정이 없어요. 주간 계획에서 추가해 보세요 →'
+            : '아직 일정이 없어요. 주간 계획을 확인해 보세요 →'}
         </Link>
       ) : (
         <ul className="space-y-2">

@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, GraduationCap, Moon, Plus, School, Sparkles } from 'lucide-react';
+import { ChevronRight, GraduationCap, Lock, Moon, Plus, School, Sparkles } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import MiniTimeline from '../components/planner/MiniTimeline';
+import PinGateModal from '../components/parent/PinGateModal';
 import { useStore } from '../store/StoreContext';
+import { useParentAuth } from '../store/ParentAuth';
 import { WEEKDAYS, weekdayKeyOf } from '../lib/date';
 import { buildBlocks, byStart, totalStudyMin } from '../lib/schedule';
 import { tint } from '../lib/colors';
@@ -11,12 +14,45 @@ import { formatDuration, formatTime } from '../lib/time';
 /** [B] 주간 시간표 */
 export default function PlannerPage() {
   const { data } = useStore();
+  const { unlocked } = useParentAuth();
+  const [pinOpen, setPinOpen] = useState(false);
   const todayKey = weekdayKeyOf(new Date());
   const weekTotal = WEEKDAYS.reduce((n, w) => n + totalStudyMin(data.week[w.key]), 0);
 
   return (
     <>
-      <PageHeader title="주간 계획" subtitle={`이번 주 공부 시간 총 ${formatDuration(weekTotal)}`} />
+      <PageHeader
+        title="주간 계획"
+        subtitle={`이번 주 공부 시간 총 ${formatDuration(weekTotal)}`}
+        right={
+          !unlocked ? (
+            <button
+              type="button"
+              onClick={() => setPinOpen(true)}
+              className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs text-ink-soft hover:bg-slate-200"
+            >
+              <Lock size={13} /> 학부모 모드로 전환
+            </button>
+          ) : undefined
+        }
+      />
+
+      {/* 학생 모드 안내 배너 */}
+      {!unlocked && (
+        <div className="mb-4 flex items-center justify-between rounded-2xl border border-amber-200/50 bg-amber-50/70 p-3 text-xs text-amber-900">
+          <div className="flex items-center gap-2">
+            <Lock size={15} className="shrink-0 text-amber-600" />
+            <span>학생 모드: 주간 계획을 <b>확인</b>할 수 있어요.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPinOpen(true)}
+            className="ml-2 shrink-0 font-bold text-accent hover:underline"
+          >
+            수정하기
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {WEEKDAYS.map((w, i) => {
@@ -76,7 +112,13 @@ export default function PlannerPage() {
               <div className="mt-3 border-t border-dashed border-slate-200 pt-2.5">
                 {studies.length === 0 ? (
                   <span className="flex items-center gap-1 text-xs text-ink-soft/70">
-                    <Plus size={14} /> 공부 계획을 세워 보세요
+                    {unlocked ? (
+                      <>
+                        <Plus size={14} /> 공부 계획을 세워 보세요
+                      </>
+                    ) : (
+                      '등록된 공부 계획이 없어요'
+                    )}
                   </span>
                 ) : (
                   <ul className="space-y-1.5">
@@ -103,6 +145,8 @@ export default function PlannerPage() {
           );
         })}
       </div>
+
+      <PinGateModal open={pinOpen} onClose={() => setPinOpen(false)} />
     </>
   );
 }

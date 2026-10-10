@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { KeyRound, Lock, LogOut, CheckCircle2, AlertCircle } from 'lucide-react';
+import { KeyRound, Lock, LogOut, CheckCircle2, AlertCircle, CalendarRange, Shapes, ChevronRight } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import MonthCalendar from '../components/calendar/MonthCalendar';
 import DayDetailModal from '../components/parent/DayDetailModal';
@@ -31,7 +31,6 @@ export default function ParentPage() {
     const daysInMonth = new Date(y, m + 1, 0).getDate();
     let completeDays = 0;
     let incompleteDays = 0;
-
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(y, m, d);
       const key = toDateKey(date);
@@ -105,6 +104,42 @@ export default function ParentPage() {
         <p className="mt-2 text-center text-xs text-ink-soft">
           날짜를 누르면 그날의 과목별 완료/미완료 목록을 볼 수 있어요 👆
         </p>
+      </div>
+
+      {/* 학습 설정 바로가기 */}
+      <div className="mb-4 paper-card space-y-1.5 p-3">
+        <p className="px-1 text-xs font-bold text-ink-soft">학습 설정 바로가기</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => navigate('/planner')}
+            className="flex items-center justify-between rounded-xl bg-slate-50 p-3 text-left transition-colors hover:bg-slate-100"
+          >
+            <span className="flex items-center gap-2">
+              <CalendarRange size={18} className="text-accent" />
+              <div>
+                <p className="text-sm font-bold text-ink">주간 계획</p>
+                <p className="text-[11px] text-ink-soft">일정 추가/수정</p>
+              </div>
+            </span>
+            <ChevronRight size={16} className="text-slate-300" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/subjects')}
+            className="flex items-center justify-between rounded-xl bg-slate-50 p-3 text-left transition-colors hover:bg-slate-100"
+          >
+            <span className="flex items-center gap-2">
+              <Shapes size={18} className="text-accent" />
+              <div>
+                <p className="text-sm font-bold text-ink">과목 관리</p>
+                <p className="text-[11px] text-ink-soft">과목 추가/수정</p>
+              </div>
+            </span>
+            <ChevronRight size={16} className="text-slate-300" />
+          </button>
+        </div>
       </div>
 
       {/* 설정 / 계정 관리 */}
