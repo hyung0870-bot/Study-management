@@ -8,13 +8,23 @@ interface Props {
   title: string;
   children: ReactNode;
   footer?: ReactNode;
+  maxWidth?: string;
+  maxHeight?: string;
 }
 
 /**
  * 모바일: 아래에서 올라오는 바텀시트 / PC: 가운데 모달
  * body 로 portal 처리 (부모의 transform 애니메이션 영향 방지)
  */
-export default function Sheet({ open, onClose, title, children, footer }: Props) {
+export default function Sheet({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  maxWidth = 'max-w-[480px]',
+  maxHeight = 'max-h-[90dvh]',
+}: Props) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -32,7 +42,7 @@ export default function Sheet({ open, onClose, title, children, footer }: Props)
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center md:p-6" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-slate-900/25 backdrop-blur-[2px] animate-[fade_.2s_ease-out]" onClick={onClose} />
-      <div className="sheet-panel relative flex max-h-[88dvh] w-full max-w-[480px] flex-col rounded-t-[28px] bg-white shadow-paper md:rounded-[28px]">
+      <div className={`sheet-panel relative flex ${maxHeight} w-full ${maxWidth} flex-col rounded-t-[28px] bg-white shadow-paper md:rounded-[28px]`}>
         <div className="mx-auto mt-2.5 h-1.5 w-10 rounded-full bg-slate-200 md:hidden" />
         <div className="flex items-center justify-between px-5 pb-2 pt-3">
           <h2 className="font-hand text-2xl font-bold">{title}</h2>
@@ -40,7 +50,7 @@ export default function Sheet({ open, onClose, title, children, footer }: Props)
             <X size={20} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 pb-4">{children}</div>
+        <div className="flex-1 overflow-y-auto px-5 pb-4 min-h-0">{children}</div>
         {footer && <div className="border-t border-slate-100 px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">{footer}</div>}
       </div>
     </div>,

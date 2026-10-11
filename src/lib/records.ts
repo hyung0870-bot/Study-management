@@ -60,9 +60,13 @@ export function recordFor(data: AppData, date: Date): DailyRecord | null {
   const saved = data.records[key];
   const st = statusOf(key);
   if (st === 'past') return saved ?? null;
-  return { date: key, items: itemsFromPlan(data, date, saved) };
+  return {
+    date: key,
+    items: itemsFromPlan(data, date, saved),
+    childMessage: saved?.childMessage,
+    parentMessage: saved?.parentMessage,
+  };
 }
-
 
 export function progressOf(rec: DailyRecord | null): { done: number; total: number; pct: number } {
   const total = rec?.items.length ?? 0;
@@ -71,5 +75,10 @@ export function progressOf(rec: DailyRecord | null): { done: number; total: numb
 }
 
 export function sameItems(a: DailyRecord | undefined, b: DailyRecord): boolean {
-  return !!a && JSON.stringify(a.items) === JSON.stringify(b.items);
+  return (
+    !!a &&
+    JSON.stringify(a.items) === JSON.stringify(b.items) &&
+    a.childMessage === b.childMessage &&
+    a.parentMessage === b.parentMessage
+  );
 }

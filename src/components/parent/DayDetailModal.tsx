@@ -44,6 +44,24 @@ export default function DayDetailModal({ open, date, record, onClose }: Props) {
           </span>
         </div>
 
+        {/* 대화 메시지 카드 (있을 경우 표시) */}
+        {(record?.childMessage || record?.parentMessage) && (
+          <div className="mb-4 space-y-2 rounded-2xl bg-amber-50/50 p-3 ring-1 ring-amber-100">
+            {record.childMessage && (
+              <div className="text-xs">
+                <span className="font-bold text-amber-900">🧒 아이의 한마디: </span>
+                <span className="font-hand text-sm text-ink font-bold">"{record.childMessage}"</span>
+              </div>
+            )}
+            {record.parentMessage && (
+              <div className="text-xs">
+                <span className="font-bold text-blue-900">❤️ 부모님의 응원: </span>
+                <span className="font-hand text-sm text-ink font-bold">"{record.parentMessage}"</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {items.length === 0 ? (
           <p className="py-8 text-center text-sm text-ink-soft">이 날은 등록된 공부 일정이 없어요.</p>
         ) : (

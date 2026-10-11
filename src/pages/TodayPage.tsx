@@ -5,6 +5,7 @@ import PageHeader from '../components/ui/PageHeader';
 import MonthCalendar from '../components/calendar/MonthCalendar';
 import SpecialMissionModal from '../components/parent/SpecialMissionModal';
 import PinGateModal from '../components/parent/PinGateModal';
+import DayMessageCard from '../components/today/DayMessageCard';
 import { useStore } from '../store/StoreContext';
 import { useParentAuth } from '../store/ParentAuth';
 import { formatKoreanDate, toDateKey, uid } from '../lib/date';
@@ -43,7 +44,49 @@ export default function TodayPage() {
       const items = rec.items.map((i) =>
         i.planId === planId ? { ...i, done: !i.done, doneAt: !i.done ? new Date().toISOString() : undefined } : i,
       );
-      return { ...prev, records: { ...prev.records, [todayKey]: { date: todayKey, items } } };
+      return {
+        ...prev,
+        records: {
+          ...prev.records,
+          [todayKey]: {
+            ...rec,
+            date: todayKey,
+            items,
+          },
+        },
+      };
+    });
+  };
+
+  const handleSaveChildMessage = (msg: string) => {
+    update((prev) => {
+      const current = prev.records[selKey] ?? recordFor(prev, selected) ?? { date: selKey, items: [] };
+      return {
+        ...prev,
+        records: {
+          ...prev.records,
+          [selKey]: {
+            ...current,
+            childMessage: msg,
+          },
+        },
+      };
+    });
+  };
+
+  const handleSaveParentMessage = (msg: string) => {
+    update((prev) => {
+      const current = prev.records[selKey] ?? recordFor(prev, selected) ?? { date: selKey, items: [] };
+      return {
+        ...prev,
+        records: {
+          ...prev.records,
+          [selKey]: {
+            ...current,
+            parentMessage: msg,
+          },
+        },
+      };
     });
   };
 
@@ -181,6 +224,18 @@ export default function TodayPage() {
           </>
         )}
       </div>
+
+      {/* 오늘의 대화 우체통 (아이 <-> 부모 메시지) */}
+      <DayMessageCard
+        dateLabel={formatKoreanDate(selected)}
+        isToday={status === 'today'}
+        unlocked={unlocked}
+        childMessage={record?.childMessage}
+        parentMessage={record?.parentMessage}
+        onSaveChildMessage={handleSaveChildMessage}
+        onSaveParentMessage={handleSaveParentMessage}
+        onRequestParentAuth={() => setPinOpen(true)}
+      />
 
       {/* 체크리스트 */}
       {!record || total === 0 ? (

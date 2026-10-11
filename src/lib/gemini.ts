@@ -67,6 +67,12 @@ function buildStudySummary(appData: AppData, targetYear?: number, targetMonth?: 
         }
       }
     }
+    if (rec?.childMessage || rec?.parentMessage) {
+      const parts = [];
+      if (rec.childMessage) parts.push(`아이: "${rec.childMessage}"`);
+      if (rec.parentMessage) parts.push(`부모: "${rec.parentMessage}"`);
+      specialMissionsList.push(`[${dStr} 대화] ${parts.join(' | ')}`);
+    }
   }
 
   const registeredSubjects = appData.subjects
@@ -93,8 +99,8 @@ ${registeredSubjects || '등록된 활동 없음'}
 3. 과목별 학습 시간 및 달성 현황:
 ${catSummary || '해당 월의 기록 없음'}
 
-4. 특별 미션 수행 내역:
-${specialMissionsList.length ? specialMissionsList.join('\n') : '수행한 특별 미션 없음'}
+4. 특별 미션 및 가족 대화 기록:
+${specialMissionsList.length ? specialMissionsList.join('\n') : '기록 없음'}
 `.trim();
 }
 

@@ -67,6 +67,8 @@ export interface DailyRecordItem {
 export interface DailyRecord {
   date: DateKey;
   items: DailyRecordItem[];
+  childMessage?: string; // 아이가 부모에게 남기는 한마디
+  parentMessage?: string; // 부모가 아이에게 남기는 한마디 / 응원 메시지
 }
 
 export interface AppData {

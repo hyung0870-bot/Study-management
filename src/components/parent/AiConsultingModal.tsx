@@ -83,6 +83,8 @@ export default function AiConsultingModal({ open, onClose, defaultRole = 'parent
       open={open}
       onClose={onClose}
       title="🤖 AI 학습 컨설팅"
+      maxWidth="max-w-[560px]"
+      maxHeight="max-h-[92dvh]"
       footer={
         <div className="flex gap-2 w-full">
           <button type="button" className="btn-ghost flex-1" onClick={onClose} disabled={loading}>
@@ -201,7 +203,7 @@ export default function AiConsultingModal({ open, onClose, defaultRole = 'parent
             </button>
           </div>
           <textarea
-            className="input-note w-full resize-none h-24 text-xs leading-relaxed"
+            className="input-note w-full resize-none h-20 text-xs leading-relaxed"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="AI에게 원하는 분석 요청이나 질문을 자유롭게 입력하세요"
@@ -216,20 +218,20 @@ export default function AiConsultingModal({ open, onClose, defaultRole = 'parent
           </div>
         )}
 
-        {/* 5. 컨설팅 결과 표시 */}
+        {/* 5. 컨설팅 결과 표시 (스크롤 및 전체 내용 확인 가능하도록 개선) */}
         {result && (
-          <div className="space-y-2">
+          <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 font-hand text-lg font-bold text-ink">
-                <Bot size={18} className="text-accent" /> 컨설팅 답변
+              <span className="flex items-center gap-1.5 font-hand text-xl font-bold text-ink">
+                <Bot size={20} className="text-accent" /> 컨설팅 답변
               </span>
               {usedModel && (
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-ink-soft">
+                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-ink-soft">
                   사용된 모델: {usedModel}
                 </span>
               )}
             </div>
-            <div className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-2xl bg-paper p-4 font-sans text-xs leading-relaxed text-ink shadow-xs ring-1 ring-slate-200/80">
+            <div className="max-h-[50vh] overflow-y-auto whitespace-pre-wrap rounded-2xl bg-paper p-4 font-sans text-xs leading-relaxed text-ink shadow-inner ring-1 ring-slate-200/90 select-text">
               {result}
             </div>
           </div>
