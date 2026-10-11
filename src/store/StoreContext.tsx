@@ -163,7 +163,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       saveTimeoutRef.current = setTimeout(async () => {
         try {
           const ref = doc(db, 'users', user.uid);
-          await setDoc(ref, nextData);
+          // Firestore는 undefined 필드가 포함되면 에러를 발생시키므로 순수 JSON 객체로 정제하여 저장
+          const cleanData = JSON.parse(JSON.stringify(nextData));
+          await setDoc(ref, cleanData);
         } catch (err) {
           console.error('클라우드 저장 실패:', err);
         } finally {

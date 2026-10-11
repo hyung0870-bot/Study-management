@@ -47,10 +47,14 @@ function AuthenticatedApp() {
   );
 }
 
+import ErrorBoundary from './components/ui/ErrorBoundary';
+
 export default function App() {
   return (
-    <AuthProvider>
-      <AuthenticatedApp />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AuthenticatedApp />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
