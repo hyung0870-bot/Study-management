@@ -93,7 +93,9 @@ export default function PinGate({ onSuccess, isModal = false }: PinGateProps = {
           ),
         )}
       </div>
-      <p className="mt-6 text-xs text-ink-soft">초기 비밀번호: 0000</p>
+      {data.parentPin === '0000' && (
+        <p className="mt-6 text-xs text-ink-soft">초기 비밀번호: 0000</p>
+      )}
     </div>
   );
 }

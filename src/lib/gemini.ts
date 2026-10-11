@@ -1,15 +1,13 @@
 import type { AppData } from '../types';
 
 /**
- * Gemini 모델 체인 (상위 모델 -> 하위 모델 순차 시도)
- * Gemini 3.8 / 3.5 / 2.5 우선순위 지원
+ * Gemini 모델 체인 (상위 Flash 모델 -> 하위 Flash 모델 순차 시도)
+ * Pro 제외, Flash 모델만 사용 (Gemini 3.8 Flash -> 3.5 Flash -> 2.5 Flash -> 1.5 Flash)
  */
 export const GEMINI_MODEL_CHAIN = [
-  'gemini-3.8-pro',
-  'gemini-3.5-pro',
-  'gemini-2.5-pro',
+  'gemini-3.8-flash',
+  'gemini-3.5-flash',
   'gemini-2.5-flash',
-  'gemini-1.5-pro',
   'gemini-1.5-flash',
 ];
 

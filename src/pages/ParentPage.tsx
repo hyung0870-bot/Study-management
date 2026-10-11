@@ -57,7 +57,10 @@ export default function ParentPage() {
 
   const selectedRecord = recordFor(data, selectedDate);
 
-  const savePin = (newPin: string) => update((prev) => ({ ...prev, parentPin: newPin }));
+  const savePin = (newPin: string) => {
+    update((prev) => ({ ...prev, parentPin: newPin }));
+    alert('학부모 비밀번호가 성공적으로 변경되었습니다.');
+  };
 
   return (
     <>

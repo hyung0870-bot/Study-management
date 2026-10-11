@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Sheet from '../ui/Sheet';
 import { Field } from '../ui/Inputs';
 
@@ -14,6 +14,16 @@ export default function ChangePinSheet({ open, currentPin, onSave, onClose }: Pr
   const [next, setNext] = useState('');
   const [nextConfirm, setNextConfirm] = useState('');
   const [error, setError] = useState('');
+
+  // 시트가 열리거나 닫힐 때 입력 상태 초기화
+  useEffect(() => {
+    if (open) {
+      setCur('');
+      setNext('');
+      setNextConfirm('');
+      setError('');
+    }
+  }, [open]);
 
   const submit = () => {
     setError('');
