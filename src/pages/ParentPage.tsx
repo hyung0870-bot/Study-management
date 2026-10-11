@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { KeyRound, Lock, LogOut, CheckCircle2, AlertCircle, CalendarRange, Shapes, ChevronRight } from 'lucide-react';
+import { KeyRound, Lock, LogOut, CheckCircle2, AlertCircle, CalendarRange, Shapes, ChevronRight, Sparkles } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import MonthCalendar from '../components/calendar/MonthCalendar';
 import DayDetailModal from '../components/parent/DayDetailModal';
 import ChangePinSheet from '../components/parent/ChangePinSheet';
+import AiConsultingModal from '../components/parent/AiConsultingModal';
 import PinGate from '../components/parent/PinGate';
 import { useParentAuth } from '../store/ParentAuth';
 import { useAuth } from '../store/AuthContext';
@@ -22,6 +23,7 @@ export default function ParentPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [modalOpen, setModalOpen] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
 
   // 이번 달의 통계 (완료일 / 미완료일)
   const stats = useMemo(() => {
@@ -106,6 +108,28 @@ export default function ParentPage() {
         </p>
       </div>
 
+      {/* AI 학습 컨설팅 배너 */}
+      <div className="mb-4 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white shadow-paper">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-bold w-fit">
+              <Sparkles size={12} /> Gemini AI 분석
+            </span>
+            <h3 className="font-hand text-xl font-bold">초등 맞춤 학습 AI 컨설팅</h3>
+            <p className="text-xs text-white/80">
+              이번 달 공부 밸런스 점검과 부족한 영역 보완 팁을 확인해 보세요.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAiModalOpen(true)}
+            className="rounded-xl bg-white px-3.5 py-2 text-xs font-extrabold text-blue-600 shadow-xs hover:bg-white/90 active:scale-95 transition-all whitespace-nowrap"
+          >
+            컨설팅 받기
+          </button>
+        </div>
+      </div>
+
       {/* 학습 설정 바로가기 */}
       <div className="mb-4 paper-card space-y-1.5 p-3">
         <p className="px-1 text-xs font-bold text-ink-soft">학습 설정 바로가기</p>
@@ -183,6 +207,12 @@ export default function ParentPage() {
         currentPin={data.parentPin}
         onSave={savePin}
         onClose={() => setPinOpen(false)}
+      />
+
+      <AiConsultingModal
+        open={aiModalOpen}
+        defaultRole="parent"
+        onClose={() => setAiModalOpen(false)}
       />
     </>
   );

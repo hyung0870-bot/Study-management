@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Lock, LockOpen, NotebookPen } from 'lucide-react';
+import { Lock, LockOpen, NotebookPen, Sparkles } from 'lucide-react';
 import BottomNav from './BottomNav';
+import AiConsultingModal from '../parent/AiConsultingModal';
 import { useParentAuth } from '../../store/ParentAuth';
 import { useStore } from '../../store/StoreContext';
 
@@ -14,6 +16,7 @@ export default function AppShell() {
   const { syncing } = useStore();
   const { pathname } = useLocation();
   const inParent = pathname.startsWith('/parent');
+  const [aiModalOpen, setAiModalOpen] = useState(false);
 
   return (
     <div className="min-h-full md:flex md:items-start md:justify-center md:px-6 md:py-10">
@@ -28,6 +31,17 @@ export default function AppShell() {
           </Link>
 
           <div className="flex items-center gap-2">
+            {/* AI 학습 코칭 버튼 (학생/학부모 공용) */}
+            <button
+              type="button"
+              onClick={() => setAiModalOpen(true)}
+              className="flex items-center gap-1 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 px-2.5 py-1 text-xs font-bold text-white shadow-xs hover:opacity-95 active:scale-95 transition-all"
+              title="AI 학습 컨설팅 및 질문"
+            >
+              <Sparkles size={13} />
+              <span>AI 코칭</span>
+            </button>
+
             <div
               title={syncing ? '클라우드에 저장 중...' : '클라우드에 안전하게 저장됨'}
               className="flex items-center gap-1.5 rounded-full bg-slate-50 px-2 py-1 text-xs text-ink-muted"
@@ -62,6 +76,12 @@ export default function AppShell() {
         </main>
 
         <BottomNav />
+
+        <AiConsultingModal
+          open={aiModalOpen}
+          defaultRole={unlocked ? 'parent' : 'student'}
+          onClose={() => setAiModalOpen(false)}
+        />
       </div>
     </div>
   );

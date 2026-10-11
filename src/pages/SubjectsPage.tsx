@@ -36,13 +36,13 @@ export default function SubjectsPage() {
     setSheetOpen(true);
   };
 
-  const save = ({ name, color }: { name: string; color: string }) => {
+  const save = ({ name, category, color, isSpecial }: { name: string; category?: string; color: string; isSpecial?: boolean }) => {
     if (!unlocked) return;
     update((prev) => ({
       ...prev,
       subjects: editing
-        ? prev.subjects.map((s) => (s.id === editing.id ? { ...s, name, color } : s))
-        : [...prev.subjects, { id: uid(), name, color }],
+        ? prev.subjects.map((s) => (s.id === editing.id ? { ...s, name, category, color, isSpecial } : s))
+        : [...prev.subjects, { id: uid(), name, category: category || '기타', color, isSpecial: !!isSpecial }],
     }));
   };
 
@@ -61,6 +61,25 @@ export default function SubjectsPage() {
     ? WEEKDAYS.reduce((n, w) => n + data.week[w.key].studies.filter((s) => s.subjectId === deleting.id).length, 0)
     : 0;
 
+  // 일반 미션과 특별 미션 분리
+  const regularSubjects = useMemo(() => data.subjects.filter((s) => !s.isSpecial), [data.subjects]);
+  const specialSubjects = useMemo(() => data.subjects.filter((s) => s.isSpecial), [data.subjects]);
+
+  // 과목(대분류)별 통계 계산
+  const categoryStats = useMemo(() => {
+    const stats: Record<string, { totalMin: number; color: string; count: number }> = {};
+    for (const s of data.subjects) {
+      const cat = s.category || '기타';
+      const m = subMin[s.id] ? sumWeek(subMin[s.id]) : 0;
+      if (!stats[cat]) {
+        stats[cat] = { totalMin: 0, color: s.color, count: 0 };
+      }
+      stats[cat].totalMin += m;
+      stats[cat].count += 1;
+    }
+    return Object.entries(stats).sort((a, b) => b[1].totalMin - a[1].totalMin);
+  }, [data.subjects, subMin]);
+
   return (
     <>
       <PageHeader
@@ -69,7 +88,7 @@ export default function SubjectsPage() {
         right={
           unlocked ? (
             <button type="button" className="btn-primary !px-3.5 !py-2" onClick={openNew}>
-              <Plus size={18} /> 추가
+              <Plus size={18} /> 활동 추가
             </button>
           ) : (
             <button
@@ -88,7 +107,7 @@ export default function SubjectsPage() {
         <div className="mb-4 flex items-center justify-between rounded-2xl border border-amber-200/50 bg-amber-50/70 p-3 text-xs text-amber-900">
           <div className="flex items-center gap-2">
             <Lock size={15} className="shrink-0 text-amber-600" />
-            <span>학생 모드: 과목 목록을 <b>확인</b>만 할 수 있어요.</span>
+            <span>학생 모드: 과목 및 활동 목록을 <b>확인</b>만 할 수 있어요.</span>
           </div>
           <button
             type="button"
@@ -100,27 +119,38 @@ export default function SubjectsPage() {
         </div>
       )}
 
-      {/* ---- 공부 과목 ---- */}
-      <h2 className="mb-2 font-hand text-2xl font-bold">📘 공부 과목</h2>
-      {data.subjects.length === 0 ? (
-        unlocked ? (
-          <button
-            type="button"
-            onClick={openNew}
-            className="paper-card flex w-full flex-col items-center gap-2 border-dashed py-10 text-ink-soft"
-          >
-            <BookMarked size={32} />
-            <span className="font-hand text-xl">첫 번째 과목을 추가해 볼까요?</span>
-          </button>
-        ) : (
-          <div className="paper-card flex w-full flex-col items-center gap-2 border-dashed py-10 text-ink-soft">
-            <BookMarked size={32} />
-            <span className="font-hand text-xl">등록된 과목이 없어요</span>
+      {/* 과목(대분류)별 학습 시간 요약 카드 */}
+      {categoryStats.length > 0 && (
+        <div className="paper-card mb-5 p-3.5">
+          <h3 className="mb-2.5 font-hand text-lg font-bold text-ink">📊 과목별 주간 학습 현황</h3>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {categoryStats.map(([cat, info]) => (
+              <div key={cat} className="flex items-center justify-between rounded-xl bg-slate-50 p-2.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: info.color }} />
+                  <span className="truncate text-xs font-bold text-ink">{cat}</span>
+                </div>
+                <span className="text-xs font-extrabold text-accent">{formatDuration(info.totalMin)}</span>
+              </div>
+            ))}
           </div>
-        )
+        </div>
+      )}
+
+      {/* ---- 일반 미션 (주간 계획 반영) ---- */}
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="font-hand text-2xl font-bold">📘 일반 미션 (주간 계획 연동)</h2>
+        <span className="text-xs text-ink-soft">{regularSubjects.length}개</span>
+      </div>
+
+      {regularSubjects.length === 0 ? (
+        <div className="paper-card mb-5 flex w-full flex-col items-center gap-2 border-dashed py-8 text-ink-soft">
+          <BookMarked size={28} />
+          <span className="font-hand text-lg">등록된 일반 미션이 없어요</span>
+        </div>
       ) : (
-        <ul className="space-y-3">
-          {data.subjects.map((s, i) => (
+        <ul className="mb-5 space-y-3">
+          {regularSubjects.map((s, i) => (
             <li
               key={s.id}
               className="paper-card animate-pop overflow-hidden p-0"
@@ -133,7 +163,14 @@ export default function SubjectsPage() {
                 >
                   {s.name.slice(0, 1)}
                 </span>
-                <p className="min-w-0 flex-1 truncate font-hand text-[22px] font-bold">{s.name}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="truncate font-hand text-[22px] font-bold">{s.name}</p>
+                    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-ink-soft">
+                      {s.category || '기타'}
+                    </span>
+                  </div>
+                </div>
                 {unlocked && (
                   <>
                     <button
@@ -160,6 +197,71 @@ export default function SubjectsPage() {
               </div>
               <div className="px-3 pb-3 pt-2">
                 <WeekMinutesGrid minutes={subMin[s.id] ?? EMPTY} color={s.color} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* ---- 특별 미션 (특정 날짜용) ---- */}
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="font-hand text-2xl font-bold">⭐ 특별 미션 (오늘 할 일 전용)</h2>
+        <span className="text-xs text-ink-soft">{specialSubjects.length}개</span>
+      </div>
+
+      {specialSubjects.length === 0 ? (
+        <div className="paper-card mb-5 flex w-full flex-col items-center gap-2 border-dashed py-8 text-ink-soft">
+          <Sparkles size={28} className="text-amber-500" />
+          <span className="font-hand text-lg">오늘 할 일에서 특별 미션을 등록하면 여기에 보관돼요</span>
+        </div>
+      ) : (
+        <ul className="mb-5 space-y-3">
+          {specialSubjects.map((s, i) => (
+            <li
+              key={s.id}
+              className="paper-card animate-pop overflow-hidden p-0"
+              style={{ animationDelay: `${i * 30}ms`, borderLeft: `6px solid ${s.color}` }}
+            >
+              <div className="flex items-center gap-3 px-3 py-3">
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-500"
+                >
+                  <Sparkles size={20} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="truncate font-hand text-[22px] font-bold">{s.name}</p>
+                    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-ink-soft">
+                      {s.category || '기타'}
+                    </span>
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                      특별 미션
+                    </span>
+                  </div>
+                </div>
+                {unlocked && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label={`${s.name} 수정`}
+                      className="rounded-full p-2 text-ink-soft hover:bg-slate-100 hover:text-ink"
+                      onClick={() => {
+                        setEditing(s);
+                        setSheetOpen(true);
+                      }}
+                    >
+                      <Pencil size={17} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`${s.name} 삭제`}
+                      className="rounded-full p-2 text-ink-soft hover:bg-rose-50 hover:text-rose-500"
+                      onClick={() => setDeleting(s)}
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </>
+                )}
               </div>
             </li>
           ))}
@@ -209,6 +311,7 @@ export default function SubjectsPage() {
             open={sheetOpen}
             initial={editing}
             existingNames={data.subjects.map((s) => s.name)}
+            existingCategories={Array.from(new Set(data.subjects.map((s) => s.category).filter(Boolean) as string[]))}
             onSave={save}
             onClose={() => setSheetOpen(false)}
           />

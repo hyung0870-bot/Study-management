@@ -11,11 +11,13 @@ export type DateKey = string;
 
 export type WeekdayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 
-/** [A] 학습 항목(과목) */
+/** [A] 학습 항목(활동 - 예: 쎈수학, 디딤돌, 리딩튜터) */
 export interface Subject {
   id: string;
-  name: string;
+  name: string; // 활동 이름 (구 과목이름)
+  category?: string; // 과목 (예: 수학, 국어, 영어, 과학 등)
   color: string; // hex
+  isSpecial?: boolean; // 특별 미션 여부 (과목관리에서 특별 미션으로 categorize)
 }
 
 /** [B] 요일별 학습 계획 1건 - 시작/끝 시간이 원형 시간표에 그대로 반영됨 */
@@ -50,7 +52,8 @@ export interface DaySchedule {
 export interface DailyRecordItem {
   planId: string;
   subjectId: string;
-  subjectName: string;
+  subjectName: string; // 활동 이름
+  category?: string; // 과목 (수학, 영어 등)
   color: string;
   amount: string;
   start: HHMM;
@@ -58,6 +61,7 @@ export interface DailyRecordItem {
   minutes: number;
   done: boolean;
   doneAt?: string; // ISO
+  isSpecial?: boolean; // 특별 미션 여부
 }
 
 export interface DailyRecord {
@@ -71,4 +75,6 @@ export interface AppData {
   week: Record<WeekdayKey, DaySchedule>;
   records: Record<DateKey, DailyRecord>;
   parentPin: string;
+  geminiApiKey?: string;
 }
+

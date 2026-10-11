@@ -20,10 +20,10 @@ export function createDefaultData(): AppData {
   return {
     version: 1,
     subjects: [
-      { id: 'sub-math', name: '수학', color: '#7aa7e8' },
-      { id: 'sub-kor', name: '국어', color: '#f2a07b' },
-      { id: 'sub-eng', name: '영어', color: '#8fcf9e' },
-      { id: 'sub-sci', name: '과학', color: '#c3a3e6' },
+      { id: 'sub-math', name: '수학 기본', category: '수학', color: '#7aa7e8' },
+      { id: 'sub-kor', name: '국어 독해', category: '국어', color: '#f2a07b' },
+      { id: 'sub-eng', name: '영어 단어', category: '영어', color: '#8fcf9e' },
+      { id: 'sub-sci', name: '과학 탐구', category: '과학', color: '#c3a3e6' },
     ],
     week,
     records: {},
@@ -38,11 +38,18 @@ function sanitize(raw: unknown): AppData {
   const data: AppData = {
     ...base,
     ...parsed,
-    subjects: Array.isArray(parsed.subjects) ? parsed.subjects : base.subjects,
+    subjects: Array.isArray(parsed.subjects)
+      ? parsed.subjects.map((s) => ({
+          ...s,
+          category: s.category || s.name, // 기본 카테고리가 없으면 활동 이름을 카테고리로
+        }))
+      : base.subjects,
     week: { ...base.week, ...(parsed.week ?? {}) },
     records: parsed.records ?? {},
     parentPin: parsed.parentPin ?? '0000',
+    geminiApiKey: parsed.geminiApiKey,
   };
+
   for (const key of Object.keys(data.week) as WeekdayKey[]) {
     const d = { ...emptyDay(), ...data.week[key] };
     d.academies = d.academies ?? [];

@@ -73,10 +73,11 @@ interface Props {
   showNow?: boolean;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
+  onEmptyClick?: (time: { start: string; end: string }) => void;
 }
 
 /** 24시간 원형 시간표 (커스텀 SVG) - 칸이 좁은 일정은 바깥 지시선으로 표기 */
-export default function CircularTimetable({ blocks, showNow, selectedId, onSelect }: Props) {
+export default function CircularTimetable({ blocks, showNow, selectedId, onSelect, onEmptyClick }: Props) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     if (!showNow) return;
@@ -129,15 +130,55 @@ export default function CircularTimetable({ blocks, showNow, selectedId, onSelec
     return [...right, ...left];
   }, [sorted]);
 
+  const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!onEmptyClick) {
+      onSelect?.(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left - (rect.width / 2);
+    const y = e.clientY - rect.top - (rect.height / 2);
+    const dist = Math.sqrt(x * x + y * y);
+    const scale = rect.width / SIZE;
+    const rInPx = R_IN * scale;
+    const rOutPx = R_OUT * scale;
+
+    // 원환체(donut) 영역 안을 클릭한 경우
+    if (dist >= rInPx && dist <= rOutPx) {
+      let angle = Math.atan2(y, x) + Math.PI / 2;
+      if (angle < 0) angle += Math.PI * 2;
+      const clickedMin = Math.round((angle / (Math.PI * 2)) * DAY_MIN);
+      // 30분 단위로 스냅
+      const snappedMin = Math.floor(clickedMin / 30) * 30;
+      const startH = Math.floor(snappedMin / 60) % 24;
+      const startM = snappedMin % 60;
+      const endMin = (snappedMin + 30) % DAY_MIN;
+      const endH = Math.floor(endMin / 60);
+      const endM = endMin % 60;
+
+      const formatHHMM = (h: number, m: number) =>
+        `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+      onEmptyClick({
+        start: formatHHMM(startH, startM),
+        end: formatHHMM(endH, endM),
+      });
+      return;
+    }
+
+    onSelect?.(null);
+  };
+
   return (
     <svg
       viewBox={`0 0 ${SIZE} ${SIZE}`}
       className="mx-auto block w-full max-w-[390px] select-none"
       role="img"
       aria-label="24시간 원형 시간표"
+      onClick={handleSvgClick}
     >
       {/* 바탕(빈 시간) */}
-      <circle cx={C} cy={C} r={R_OUT} fill="#ffffff" stroke="#e3e7ee" strokeWidth={1.5} />
+      <circle cx={C} cy={C} r={R_OUT} fill="#ffffff" stroke="#e3e7ee" strokeWidth={1.5} className="cursor-pointer" />
       <circle cx={C} cy={C} r={R_IN} fill="#fffefb" stroke="#e3e7ee" strokeWidth={1.5} />
 
       {/* 시간 구분선 */}

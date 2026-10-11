@@ -1,19 +1,25 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarDays, Check, ChevronDown, PartyPopper, NotebookPen } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, PartyPopper, NotebookPen, Sparkles } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import MonthCalendar from '../components/calendar/MonthCalendar';
+import SpecialMissionModal from '../components/parent/SpecialMissionModal';
+import PinGateModal from '../components/parent/PinGateModal';
 import { useStore } from '../store/StoreContext';
-import { formatKoreanDate, toDateKey } from '../lib/date';
+import { useParentAuth } from '../store/ParentAuth';
+import { formatKoreanDate, toDateKey, uid } from '../lib/date';
 import { progressOf, recordFor, sameItems, statusOf } from '../lib/records';
-import { tint } from '../lib/colors';
-import { formatDuration, formatTime } from '../lib/time';
+import { SUBJECT_PALETTE, tint } from '../lib/colors';
+import { durationMin, formatDuration, formatTime } from '../lib/time';
 
 /** [C] 매일의 학업 체크리스트 (메인) */
 export default function TodayPage() {
   const { data, update } = useStore();
+  const { unlocked } = useParentAuth();
   const [selected, setSelected] = useState(() => new Date());
   const [calOpen, setCalOpen] = useState(false);
+  const [specialModalOpen, setSpecialModalOpen] = useState(false);
+  const [pinOpen, setPinOpen] = useState(false);
 
   const today = new Date();
   const todayKey = toDateKey(today);
@@ -41,6 +47,66 @@ export default function TodayPage() {
     });
   };
 
+  const addSpecialMission = ({
+    activityName,
+    category,
+    start,
+    end,
+    amount,
+  }: {
+    activityName: string;
+    category: string;
+    start: string;
+    end: string;
+    amount?: string;
+  }) => {
+    update((prev) => {
+      // 1. 해당 활동이 과목 관리에 있는지 확인, 없으면 과목 관리에 추가(특별 미션 플래그)
+      let subject = prev.subjects.find((s) => s.name.trim() === activityName.trim());
+      const nextSubjects = [...prev.subjects];
+      if (!subject) {
+        const color = SUBJECT_PALETTE[prev.subjects.length % SUBJECT_PALETTE.length];
+        subject = {
+          id: uid(),
+          name: activityName,
+          category,
+          color,
+          isSpecial: true,
+        };
+        nextSubjects.push(subject);
+      }
+
+      // 2. 현재 선택된 날짜의 레코드에 특별 미션 아이템 추가
+      const targetDateKey = selKey;
+      const currentRec = prev.records[targetDateKey] ?? recordFor(prev, selected) ?? { date: targetDateKey, items: [] };
+      const newItem = {
+        planId: uid(),
+        subjectId: subject.id,
+        subjectName: subject.name,
+        category: subject.category || category,
+        color: subject.color,
+        amount: amount || '특별 미션',
+        start,
+        end,
+        minutes: durationMin(start, end),
+        done: false,
+        isSpecial: true,
+      };
+
+      return {
+        ...prev,
+        subjects: nextSubjects,
+        records: {
+          ...prev.records,
+          [targetDateKey]: {
+            date: targetDateKey,
+            items: [...currentRec.items, newItem],
+          },
+        },
+      };
+    });
+  };
+
   const title = status === 'today' ? '오늘 할 일' : status === 'past' ? '지난 기록' : '미리 보기';
   const message =
     total === 0 ? '' : pct === 100 ? '모두 끝냈어요! 정말 멋져요 🎉' : pct >= 50 ? '절반 넘었어요, 조금만 더! 💪' : '하나씩 차근차근 해 봐요 ✏️';
@@ -51,14 +117,29 @@ export default function TodayPage() {
         title={title}
         subtitle={formatKoreanDate(selected)}
         right={
-          <button
-            type="button"
-            onClick={() => setCalOpen((o) => !o)}
-            className={`btn-ghost !px-3 !py-2 !text-xs ${calOpen ? '!bg-ink !text-white' : ''}`}
-          >
-            <CalendarDays size={16} /> 달력
-            <ChevronDown size={14} className={`transition-transform ${calOpen ? 'rotate-180' : ''}`} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                if (!unlocked) {
+                  setPinOpen(true);
+                } else {
+                  setSpecialModalOpen(true);
+                }
+              }}
+              className="flex items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-amber-600 active:scale-95 transition-all"
+            >
+              <Sparkles size={14} /> 특별 미션
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalOpen((o) => !o)}
+              className={`btn-ghost !px-3 !py-2 !text-xs ${calOpen ? '!bg-ink !text-white' : ''}`}
+            >
+              <CalendarDays size={16} /> 달력
+              <ChevronDown size={14} className={`transition-transform ${calOpen ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
         }
       />
 
@@ -137,6 +218,16 @@ export default function TodayPage() {
                       >
                         {it.subjectName}
                       </span>
+                      {it.category && (
+                        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] text-ink-soft">
+                          {it.category}
+                        </span>
+                      )}
+                      {it.isSpecial && (
+                        <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                          ⭐ 특별 미션
+                        </span>
+                      )}
                       <span className={`truncate text-sm ${it.done ? 'strike-hand' : ''}`}>{it.amount}</span>
                     </div>
                     <p className="mt-1 text-xs text-ink-soft">
@@ -167,6 +258,17 @@ export default function TodayPage() {
           {status === 'past' ? '지난 기록은 볼 수만 있어요' : '체크는 그날이 되면 할 수 있어요'}
         </p>
       )}
+
+      {/* 특별 미션 등록 모달 */}
+      <SpecialMissionModal
+        open={specialModalOpen}
+        existingSubjects={data.subjects}
+        onSave={addSpecialMission}
+        onClose={() => setSpecialModalOpen(false)}
+      />
+
+      {/* 학부모 PIN 모달 */}
+      <PinGateModal open={pinOpen} onClose={() => setPinOpen(false)} />
     </>
   );
 }

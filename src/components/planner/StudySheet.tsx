@@ -82,7 +82,7 @@ export default function StudySheet({ open, initial, defaults, subjects, otherBlo
       ) : (
         <div className="space-y-5 pt-1">
           <div>
-            <span className="mb-2 block text-xs font-bold text-ink-soft">과목</span>
+            <span className="mb-2 block text-xs font-bold text-ink-soft">활동 / 교재</span>
             <div className="flex flex-wrap gap-2">
               {subjects.map((s) => {
                 const active = draft.subjectId === s.id;
@@ -91,14 +91,19 @@ export default function StudySheet({ open, initial, defaults, subjects, otherBlo
                     key={s.id}
                     type="button"
                     onClick={() => setDraft((d) => ({ ...d, subjectId: s.id }))}
-                    className="rounded-full border-2 px-3.5 py-1 font-hand text-lg font-bold transition-all"
+                    className="flex items-center gap-1.5 rounded-full border-2 px-3.5 py-1 font-hand text-lg font-bold transition-all"
                     style={
                       active
                         ? { backgroundColor: s.color, borderColor: s.color, color: 'white' }
                         : { backgroundColor: tint(s.color, 0.1), borderColor: 'transparent', color: s.color }
                     }
                   >
-                    {s.name}
+                    <span>{s.name}</span>
+                    {s.category && (
+                      <span className={`text-xs px-1.5 py-0.2 rounded-full font-sans font-normal ${active ? 'bg-white/20 text-white' : 'bg-black/5 text-ink-soft'}`}>
+                        {s.category}
+                      </span>
+                    )}
                   </button>
                 );
               })}
