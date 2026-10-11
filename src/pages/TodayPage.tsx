@@ -12,6 +12,7 @@ import { formatKoreanDate, toDateKey, uid } from '../lib/date';
 import { progressOf, recordFor, sameItems, statusOf } from '../lib/records';
 import { SUBJECT_PALETTE, tint } from '../lib/colors';
 import { durationMin, formatDuration, formatTime } from '../lib/time';
+import type { DailyRecordItem } from '../types';
 
 /** [C] 매일의 학업 체크리스트 (메인) */
 export default function TodayPage() {
@@ -21,6 +22,28 @@ export default function TodayPage() {
   const [calOpen, setCalOpen] = useState(false);
   const [specialModalOpen, setSpecialModalOpen] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
+  const [editingSpecialItem, setEditingSpecialItem] = useState<DailyRecordItem | null>(null);
+
+  // 특별 미션 클릭 시 수정 모달 열기
+  const handleItemClick = (it: DailyRecordItem) => {
+    if (it.isSpecial) {
+      if (!unlocked) {
+        setPinOpen(true);
+        return;
+      }
+      setEditingSpecialItem(it);
+      setSpecialModalOpen(true);
+    }
+  };
+
+  const handleOpenNewSpecialMission = () => {
+    if (!unlocked) {
+      setPinOpen(true);
+      return;
+    }
+    setEditingSpecialItem(null);
+    setSpecialModalOpen(true);
+  };
 
   const today = new Date();
   const todayKey = toDateKey(today);
@@ -90,13 +113,15 @@ export default function TodayPage() {
     });
   };
 
-  const addSpecialMission = ({
+  const saveSpecialMission = ({
+    planId,
     activityName,
     category,
     start,
     end,
     amount,
   }: {
+    planId?: string;
     activityName: string;
     category: string;
     start: string;
@@ -119,22 +144,45 @@ export default function TodayPage() {
         nextSubjects.push(subject);
       }
 
-      // 2. 현재 선택된 날짜의 레코드에 특별 미션 아이템 추가
+      // 2. 현재 선택된 날짜의 레코드에서 수정 또는 추가
       const targetDateKey = selKey;
       const currentRec = prev.records[targetDateKey] ?? recordFor(prev, selected) ?? { date: targetDateKey, items: [] };
-      const newItem = {
-        planId: uid(),
-        subjectId: subject.id,
-        subjectName: subject.name,
-        category: subject.category || category,
-        color: subject.color,
-        amount: amount || '특별 미션',
-        start,
-        end,
-        minutes: durationMin(start, end),
-        done: false,
-        isSpecial: true,
-      };
+
+      let nextItems = [...currentRec.items];
+      if (planId) {
+        // 기존 수정
+        nextItems = nextItems.map((item) =>
+          item.planId === planId
+            ? {
+                ...item,
+                subjectId: subject!.id,
+                subjectName: subject!.name,
+                category: subject!.category || category,
+                color: subject!.color,
+                amount: amount || '특별 미션',
+                start,
+                end,
+                minutes: durationMin(start, end),
+              }
+            : item,
+        );
+      } else {
+        // 신규 추가
+        const newItem = {
+          planId: uid(),
+          subjectId: subject.id,
+          subjectName: subject.name,
+          category: subject.category || category,
+          color: subject.color,
+          amount: amount || '특별 미션',
+          start,
+          end,
+          minutes: durationMin(start, end),
+          done: false,
+          isSpecial: true,
+        };
+        nextItems.push(newItem);
+      }
 
       return {
         ...prev,
@@ -142,8 +190,28 @@ export default function TodayPage() {
         records: {
           ...prev.records,
           [targetDateKey]: {
+            ...currentRec,
             date: targetDateKey,
-            items: [...currentRec.items, newItem],
+            items: nextItems,
+          },
+        },
+      };
+    });
+  };
+
+  const deleteSpecialMission = (planId: string) => {
+    update((prev) => {
+      const targetDateKey = selKey;
+      const currentRec = prev.records[targetDateKey] ?? recordFor(prev, selected);
+      if (!currentRec) return prev;
+
+      return {
+        ...prev,
+        records: {
+          ...prev.records,
+          [targetDateKey]: {
+            ...currentRec,
+            items: currentRec.items.filter((it) => it.planId !== planId),
           },
         },
       };
@@ -163,13 +231,7 @@ export default function TodayPage() {
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => {
-                if (!unlocked) {
-                  setPinOpen(true);
-                } else {
-                  setSpecialModalOpen(true);
-                }
-              }}
+              onClick={handleOpenNewSpecialMission}
               className="flex items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-amber-600 active:scale-95 transition-all"
             >
               <Sparkles size={14} /> 특별 미션
@@ -253,19 +315,25 @@ export default function TodayPage() {
       ) : (
         <ul className="space-y-2.5">
           {record.items.map((it, i) => {
-            const clickable = status === 'today';
+            const checkable = status === 'today';
+            const isSpecialEditable = it.isSpecial;
             return (
               <li key={it.planId} className="animate-pop" style={{ animationDelay: `${i * 30}ms` }}>
-                <button
-                  type="button"
-                  disabled={!clickable}
-                  onClick={() => toggle(it.planId)}
+                <div
                   className={`paper-card flex w-full items-center gap-3 overflow-hidden p-0 text-left transition-all ${
                     it.done ? 'opacity-70' : ''
-                  } ${clickable ? 'active:scale-[0.99]' : 'cursor-default'}`}
+                  }`}
                 >
                   <span className="w-1.5 self-stretch" style={{ backgroundColor: it.color }} />
-                  <div className="min-w-0 flex-1 py-3">
+                  
+                  {/* 항목 내용 영역: 특별 미션인 경우 클릭 시 수정 팝업 오픈 */}
+                  <div
+                    onClick={() => isSpecialEditable && handleItemClick(it)}
+                    className={`min-w-0 flex-1 py-3 select-none ${
+                      isSpecialEditable ? 'cursor-pointer hover:opacity-85 active:scale-[0.995]' : ''
+                    }`}
+                    title={isSpecialEditable ? '클릭하여 특별 미션 수정' : undefined}
+                  >
                     <div className="flex items-center gap-2">
                       <span
                         className={`rounded-md px-1.5 font-hand text-xl font-bold leading-7 ${it.done ? 'strike-hand' : ''}`}
@@ -279,8 +347,8 @@ export default function TodayPage() {
                         </span>
                       )}
                       {it.isSpecial && (
-                        <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
-                          ⭐ 특별 미션
+                        <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 hover:underline">
+                          ⭐ 특별 미션 (수정가능)
                         </span>
                       )}
                       <span className={`truncate text-sm ${it.done ? 'strike-hand' : ''}`}>{it.amount}</span>
@@ -289,14 +357,20 @@ export default function TodayPage() {
                       {formatTime(it.start)} ~ {formatTime(it.end)} · {formatDuration(it.minutes)}
                     </p>
                   </div>
-                  <span
+
+                  {/* 체크박스 버튼: 체크/해제 전용 */}
+                  <button
+                    type="button"
+                    disabled={!checkable}
+                    onClick={() => toggle(it.planId)}
+                    aria-label={it.done ? `${it.subjectName} 완료 취소` : `${it.subjectName} 완료 체크`}
                     className={`mr-4 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 transition-all ${
-                      it.done ? 'scale-105 border-emerald-400 bg-emerald-400 text-white' : 'border-slate-300 bg-white'
-                    } ${status === 'future' ? 'opacity-30' : ''}`}
+                      it.done ? 'scale-105 border-emerald-400 bg-emerald-400 text-white' : 'border-slate-300 bg-white hover:border-slate-400'
+                    } ${checkable ? 'cursor-pointer active:scale-95' : 'cursor-default opacity-40'}`}
                   >
                     {it.done && <Check size={20} strokeWidth={3} />}
-                  </span>
-                </button>
+                  </button>
+                </div>
               </li>
             );
           })}
@@ -314,12 +388,18 @@ export default function TodayPage() {
         </p>
       )}
 
-      {/* 특별 미션 등록 모달 */}
+      {/* 특별 미션 등록 및 수정 모달 */}
       <SpecialMissionModal
+        key={editingSpecialItem?.planId ?? 'new'}
         open={specialModalOpen}
+        initialItem={editingSpecialItem}
         existingSubjects={data.subjects}
-        onSave={addSpecialMission}
-        onClose={() => setSpecialModalOpen(false)}
+        onSave={saveSpecialMission}
+        onDelete={deleteSpecialMission}
+        onClose={() => {
+          setSpecialModalOpen(false);
+          setEditingSpecialItem(null);
+        }}
       />
 
       {/* 학부모 PIN 모달 */}

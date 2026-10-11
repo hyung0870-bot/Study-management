@@ -6,15 +6,25 @@ import type { HHMM, Subject } from '../../types';
 
 interface Props {
   open: boolean;
+  initialItem?: {
+    planId?: string;
+    subjectName: string;
+    category?: string;
+    start: HHMM;
+    end: HHMM;
+    amount?: string;
+  } | null;
   existingSubjects: Subject[];
   defaultTimes?: { start: HHMM; end: HHMM };
   onSave: (mission: {
+    planId?: string;
     activityName: string;
     category: string;
     start: HHMM;
     end: HHMM;
     amount?: string;
   }) => void;
+  onDelete?: (planId: string) => void;
   onClose: () => void;
 }
 
@@ -22,11 +32,14 @@ const DEFAULT_CATEGORIES = ['수학', '국어', '영어', '과학', '사회', '�
 
 export default function SpecialMissionModal({
   open,
+  initialItem,
   existingSubjects,
   defaultTimes = { start: '17:00', end: '17:30' },
   onSave,
+  onDelete,
   onClose,
 }: Props) {
+  const isEditing = !!initialItem;
   const [activityName, setActivityName] = useState('');
   const [category, setCategory] = useState('수학');
   const [amount, setAmount] = useState('');
@@ -39,12 +52,20 @@ export default function SpecialMissionModal({
 
   useEffect(() => {
     if (!open) return;
-    setActivityName('');
-    setCategory('수학');
-    setAmount('');
-    setStart(defaultTimes.start);
-    setEnd(defaultTimes.end);
-  }, [open, defaultTimes.start, defaultTimes.end]);
+    if (initialItem) {
+      setActivityName(initialItem.subjectName);
+      setCategory(initialItem.category || '수학');
+      setAmount(initialItem.amount || '');
+      setStart(initialItem.start);
+      setEnd(initialItem.end);
+    } else {
+      setActivityName('');
+      setCategory('수학');
+      setAmount('');
+      setStart(defaultTimes.start);
+      setEnd(defaultTimes.end);
+    }
+  }, [open, initialItem, defaultTimes.start, defaultTimes.end]);
 
   const selectExistingSubject = (sub: Subject) => {
     setActivityName(sub.name);
@@ -56,6 +77,7 @@ export default function SpecialMissionModal({
   const submit = () => {
     if (!valid) return;
     onSave({
+      planId: initialItem?.planId,
       activityName: activityName.trim(),
       category: category.trim(),
       amount: amount.trim(),
@@ -69,11 +91,25 @@ export default function SpecialMissionModal({
     <Sheet
       open={open}
       onClose={onClose}
-      title="⭐ 특별 미션 등록"
+      title={isEditing ? '⭐ 특별 미션 수정' : '⭐ 특별 미션 등록'}
       footer={
-        <button type="button" className="btn-primary w-full" disabled={!valid} onClick={submit}>
-          오늘 할 일에 등록하기
-        </button>
+        <div className="flex gap-2 w-full">
+          {isEditing && initialItem?.planId && onDelete && (
+            <button
+              type="button"
+              className="btn-ghost !text-rose-500 font-bold"
+              onClick={() => {
+                onDelete(initialItem.planId!);
+                onClose();
+              }}
+            >
+              삭제
+            </button>
+          )}
+          <button type="button" className="btn-primary flex-1" disabled={!valid} onClick={submit}>
+            {isEditing ? '수정 완료' : '오늘 할 일에 등록하기'}
+          </button>
+        </div>
       }
     >
       <div className="space-y-4 pt-1">
