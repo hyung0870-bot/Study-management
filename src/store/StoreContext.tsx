@@ -502,11 +502,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           childrenData: nextChildrenData,
         };
 
-        persistToCloud(next);
+        // UI 아이 전환은 화면 렌더링 전환이므로 클라우드를 덮어쓰지 않고 로컬에만 동기화
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
         return next;
       });
     },
-    [persistToCloud, selectedChildIdState],
+    [selectedChildIdState],
   );
 
   // 다른 아이의 과목/주간일정 정보를 현재 선택된 아이에게 복사/불러오기
