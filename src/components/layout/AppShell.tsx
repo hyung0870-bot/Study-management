@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Lock, LockOpen, NotebookPen, Sparkles, RefreshCw } from 'lucide-react';
 import BottomNav from './BottomNav';
 import AiConsultingModal from '../parent/AiConsultingModal';
+import CopyChildPlanModal from '../parent/CopyChildPlanModal';
 import { useParentAuth } from '../../store/ParentAuth';
 import { useStore } from '../../store/StoreContext';
 
@@ -17,6 +18,7 @@ export default function AppShell() {
   const { pathname } = useLocation();
   const inParent = pathname.startsWith('/parent');
   const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [pendingCopySourceId, setPendingCopySourceId] = useState<string | null>(null);
 
 
   // 현재 활성 사용자 또는 기본 역할 표시
@@ -125,16 +127,13 @@ export default function AppShell() {
             {/* 다른 아이의 과목/일정 복사해오기 드롭다운/버튼 */}
             {((data.familyMembers ?? []).filter((m) => m.role === 'child').length > 1) && (
               <select
+                value=""
                 onChange={(e) => {
                   const sourceId = e.target.value;
                   if (!sourceId) return;
-                  if (window.confirm('선택한 아이의 과목 및 주간 시간표 계획을 현재 아이에게 복사해 올까요?')) {
-                    copyFromChild(sourceId);
-                  }
-                  e.target.value = '';
+                  setPendingCopySourceId(sourceId);
                 }}
-                defaultValue=""
-                className="rounded-lg bg-white border border-amber-200 px-2 py-1 text-[11px] font-bold text-amber-900 shrink-0 cursor-pointer"
+                className="rounded-lg bg-white border border-amber-200 px-2 py-1 text-[11px] font-bold text-amber-900 shrink-0 cursor-pointer hover:bg-amber-50 transition"
               >
                 <option value="" disabled>
                   📥 다른 아이 계획 불러오기
@@ -143,7 +142,7 @@ export default function AppShell() {
                   .filter((m) => m.role === 'child' && m.id !== (selectedChildId || (data.familyMembers ?? []).find((x) => x.role === 'child')?.id))
                   .map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name}의 과목/계획 복사
+                      {c.name}의 과목/계획 불러오기
                     </option>
                   ))}
               </select>
@@ -165,6 +164,29 @@ export default function AppShell() {
           defaultRole={unlocked ? 'parent' : 'student'}
           onClose={() => setAiModalOpen(false)}
         />
+
+        {/* 다른 아이 계획 불러오기 확인 & PIN 인증 모달 */}
+        {(() => {
+          const currentChildId =
+            selectedChildId || (data.familyMembers ?? []).find((x) => x.role === 'child')?.id;
+          const targetChild = (data.familyMembers ?? []).find((m) => m.id === currentChildId) ?? null;
+          const sourceChild = (data.familyMembers ?? []).find((m) => m.id === pendingCopySourceId) ?? null;
+
+          return (
+            <CopyChildPlanModal
+              open={!!pendingCopySourceId}
+              sourceChild={sourceChild}
+              targetChild={targetChild}
+              onConfirm={() => {
+                if (pendingCopySourceId) {
+                  copyFromChild(pendingCopySourceId);
+                  setPendingCopySourceId(null);
+                }
+              }}
+              onClose={() => setPendingCopySourceId(null)}
+            />
+          );
+        })()}
       </div>
     </div>
   );
