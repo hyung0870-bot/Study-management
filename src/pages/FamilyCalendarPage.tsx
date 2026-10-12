@@ -5,13 +5,23 @@ import {
   Plus,
   Calendar as CalendarIcon,
   Sparkles,
+  Repeat,
+  Moon,
 } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import CalendarEventModal from '../components/calendar/CalendarEventModal';
 import { useStore } from '../store/StoreContext';
 import { useParentAuth } from '../store/ParentAuth';
 import { toDateKey, formatKoreanDate, uid } from '../lib/date';
-import type { CalendarEvent, CalendarEventType, DateKey } from '../types';
+import { isEventOccurringOnDate } from '../lib/lunar';
+
+import type {
+  CalendarDateType,
+  CalendarEvent,
+  CalendarEventType,
+  DateKey,
+  RecurrenceType,
+} from '../types';
 
 const HEAD = ['월', '화', '수', '목', '금', '토', '일'];
 
@@ -83,14 +93,9 @@ export default function FamilyCalendarPage() {
     setCursor((c) => new Date(c.getFullYear(), c.getMonth() + n, 1));
   };
 
-  // 특정 날짜에 걸쳐 있는 이벤트들 찾기
+  // 특정 날짜에 발생하는 이벤트들 찾기 (반복 및 음력 지원)
   const getEventsForDate = (dateKey: DateKey) => {
-    return events.filter((ev) => {
-      if (ev.endDate) {
-        return dateKey >= ev.startDate && dateKey <= ev.endDate;
-      }
-      return ev.startDate === dateKey;
-    });
+    return events.filter((ev) => isEventOccurringOnDate(ev, dateKey));
   };
 
   // 선택된 날짜의 이벤트 목록
@@ -100,22 +105,26 @@ export default function FamilyCalendarPage() {
     );
   }, [events, selKey, typeFilter]);
 
-  // 이번 달 전체 다가오는 이벤트들
+  // 이번 달 전체 다가오는 이벤트들 (날짜별 발생 여부 수집)
   const upcomingMonthEvents = useMemo(() => {
     const y = cursor.getFullYear();
     const m = cursor.getMonth();
-    const startStr = `${y}-${String(m + 1).padStart(2, '0')}-01`;
-    const lastDay = new Date(y, m + 1, 0).getDate();
-    const endStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
 
-    return events
-      .filter((ev) => {
-        const evEnd = ev.endDate || ev.startDate;
-        const matchesMonth = evEnd >= startStr && ev.startDate <= endStr;
+    const list: { event: CalendarEvent; occurrenceDateKey: DateKey }[] = [];
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateKey = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dayEvs = events.filter((ev) => {
         const matchesFilter = typeFilter === 'all' ? true : ev.type === typeFilter;
-        return matchesMonth && matchesFilter;
-      })
-      .sort((a, b) => a.startDate.localeCompare(b.startDate));
+        return matchesFilter && isEventOccurringOnDate(ev, dateKey);
+      });
+      dayEvs.forEach((ev) => {
+        list.push({ event: ev, occurrenceDateKey: dateKey });
+      });
+    }
+
+    return list.sort((a, b) => a.occurrenceDateKey.localeCompare(b.occurrenceDateKey));
   }, [events, cursor, typeFilter]);
 
   const handleOpenAdd = () => {
@@ -136,6 +145,11 @@ export default function FamilyCalendarPage() {
     endDate?: DateKey;
     memo?: string;
     createdByName?: string;
+    calendarType?: CalendarDateType;
+    lunarMonth?: number;
+    lunarDay?: number;
+    isLeapMonth?: boolean;
+    recurrence?: RecurrenceType;
   }) => {
     update((prev) => {
       const prevEvents = prev.calendarEvents ?? [];
@@ -152,6 +166,11 @@ export default function FamilyCalendarPage() {
                 endDate: saved.endDate,
                 memo: saved.memo,
                 createdByName: saved.createdByName || ev.createdByName,
+                calendarType: saved.calendarType,
+                lunarMonth: saved.lunarMonth,
+                lunarDay: saved.lunarDay,
+                isLeapMonth: saved.isLeapMonth,
+                recurrence: saved.recurrence,
               }
             : ev,
         );
@@ -167,6 +186,11 @@ export default function FamilyCalendarPage() {
           createdById: activeMember?.id,
           createdByName: saved.createdByName || activeMember?.name || '가족',
           createdAt: new Date().toISOString(),
+          calendarType: saved.calendarType,
+          lunarMonth: saved.lunarMonth,
+          lunarDay: saved.lunarDay,
+          isLeapMonth: saved.isLeapMonth,
+          recurrence: saved.recurrence,
         };
         nextEvents = [...prevEvents, newEv];
       }
@@ -180,6 +204,7 @@ export default function FamilyCalendarPage() {
       calendarEvents: (prev.calendarEvents ?? []).filter((e) => e.id !== id),
     }));
   };
+
 
   return (
     <>
@@ -391,6 +416,24 @@ export default function FamilyCalendarPage() {
                         >
                           {cfg.label}
                         </span>
+                        {ev.calendarType === 'lunar' && (
+                          <span className="flex items-center gap-0.5 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-extrabold text-indigo-700 ring-1 ring-indigo-200/60">
+                            <Moon size={10} />
+                            <span>음력 {ev.isLeapMonth ? '윤' : ''}{ev.lunarMonth}월 {ev.lunarDay}일</span>
+                          </span>
+                        )}
+                        {ev.recurrence && ev.recurrence !== 'none' && (
+                          <span className="flex items-center gap-0.5 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-extrabold text-accent ring-1 ring-accent/30">
+                            <Repeat size={10} />
+                            <span>
+                              {ev.recurrence === 'weekly'
+                                ? '매주 반복'
+                                : ev.recurrence === 'monthly'
+                                  ? '매달 반복'
+                                  : '매년 반복'}
+                            </span>
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5 text-[11px] text-ink-soft">
                         {ev.endDate && ev.endDate !== ev.startDate ? (
@@ -398,7 +441,7 @@ export default function FamilyCalendarPage() {
                             {ev.startDate} ~ {ev.endDate}
                           </span>
                         ) : (
-                          <span>{ev.startDate}</span>
+                          <span>{selKey}</span>
                         )}
                         {ev.createdByName && (
                           <span>• 등록: {ev.createdByName}</span>
@@ -439,26 +482,39 @@ export default function FamilyCalendarPage() {
           </p>
         ) : (
           <div className="divide-y divide-slate-100">
-            {upcomingMonthEvents.map((ev) => {
+            {upcomingMonthEvents.map(({ event: ev, occurrenceDateKey }) => {
               const cfg = TYPE_CONFIG[ev.type] || TYPE_CONFIG.other;
               return (
                 <div
-                  key={ev.id}
+                  key={`${ev.id}-${occurrenceDateKey}`}
                   onClick={() => handleOpenEdit(ev)}
                   className="flex items-center justify-between py-2.5 px-1 hover:bg-slate-50 rounded-xl transition cursor-pointer"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className="text-lg">{cfg.icon}</span>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-bold text-xs text-ink truncate">{ev.title}</span>
                         <span className={`text-[10px] font-bold ${cfg.text}`}>
                           {cfg.label}
                         </span>
+                        {ev.calendarType === 'lunar' && (
+                          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                            음력 {ev.isLeapMonth ? '윤' : ''}{ev.lunarMonth}/{ev.lunarDay}
+                          </span>
+                        )}
+                        {ev.recurrence && ev.recurrence !== 'none' && (
+                          <span className="text-[10px] font-bold text-accent bg-accent/10 px-1.5 py-0.5 rounded">
+                            {ev.recurrence === 'yearly'
+                              ? '매년'
+                              : ev.recurrence === 'monthly'
+                                ? '매달'
+                                : '매주'}
+                          </span>
+                        )}
                       </div>
                       <p className="text-[11px] text-ink-soft">
-                        {ev.startDate}
-                        {ev.endDate && ev.endDate !== ev.startDate && ` ~ ${ev.endDate}`}
+                        {occurrenceDateKey}
                         {ev.createdByName && ` (${ev.createdByName})`}
                       </p>
                     </div>

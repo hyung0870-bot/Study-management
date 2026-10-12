@@ -12,7 +12,9 @@ import { formatKoreanDate, toDateKey, uid } from '../lib/date';
 import { progressOf, recordFor, sameItems, statusOf } from '../lib/records';
 import { SUBJECT_PALETTE, tint } from '../lib/colors';
 import { durationMin, formatDuration, formatTime } from '../lib/time';
+import { isEventOccurringOnDate } from '../lib/lunar';
 import type { DailyRecordItem } from '../types';
+
 
 /** [C] 매일의 학업 체크리스트 (메인) */
 export default function TodayPage() {
@@ -266,11 +268,11 @@ export default function TodayPage() {
 
       {/* 가족 달력 오늘/선택일정 배너 */}
       {(() => {
-        const dayEvents = (data.calendarEvents ?? []).filter((ev) => {
-          if (ev.endDate) return selKey >= ev.startDate && selKey <= ev.endDate;
-          return ev.startDate === selKey;
-        });
+        const dayEvents = (data.calendarEvents ?? []).filter((ev) =>
+          isEventOccurringOnDate(ev, selKey),
+        );
         if (dayEvents.length === 0) return null;
+
 
         return (
           <div className="paper-card mb-4 p-3 bg-gradient-to-r from-amber-50/80 to-rose-50/80 border border-amber-200/60 space-y-2">

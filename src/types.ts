@@ -84,6 +84,9 @@ export interface FamilyMember {
 
 export type CalendarEventType = 'birthday' | 'trip' | 'anniversary' | 'other';
 
+export type RecurrenceType = 'none' | 'weekly' | 'monthly' | 'yearly';
+export type CalendarDateType = 'solar' | 'lunar';
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -94,7 +97,18 @@ export interface CalendarEvent {
   createdById?: string; // 등록한 가족 구성원 ID 또는 이름
   createdByName?: string;
   createdAt: string; // ISO
+
+  /** 양력(solar) or 음력(lunar) */
+  calendarType?: CalendarDateType;
+  /** 음력인 경우 저장되는 음력 월/일 (예: lunarMonth: 8, lunarDay: 15, isLeapMonth?: false) */
+  lunarMonth?: number;
+  lunarDay?: number;
+  isLeapMonth?: boolean;
+
+  /** 반복 유형: 'none' | 'weekly' | 'monthly' | 'yearly' */
+  recurrence?: RecurrenceType;
 }
+
 
 export interface AppData {
   version: 1;
