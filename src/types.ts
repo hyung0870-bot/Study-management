@@ -117,6 +117,13 @@ export interface CalendarEvent {
 }
 
 
+export interface UpdateMetadata {
+  updatedAt: string; // ISO
+  updaterId?: string;
+  updaterName: string;
+  summary: string;
+}
+
 export interface AppData {
   version: 1;
   subjects: Subject[];
@@ -128,7 +135,10 @@ export interface AppData {
   calendarEvents?: CalendarEvent[];
   /** 아이(FamilyMember.id)별 독립된 학습 데이터 저장소 */
   childrenData?: Record<string, ChildStudyData>;
+  /** 타 기기 실시간 업데이트 감지용 메타데이터 */
+  lastUpdatedBy?: UpdateMetadata;
 }
+
 
 
 

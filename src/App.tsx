@@ -124,11 +124,11 @@ function AuthenticatedApp() {
   }
 
   return (
-    <StoreProvider>
-      <ParentAuthProvider>
+    <ParentAuthProvider>
+      <StoreProvider>
         <MainApp />
-      </ParentAuthProvider>
-    </StoreProvider>
+      </StoreProvider>
+    </ParentAuthProvider>
   );
 }
 

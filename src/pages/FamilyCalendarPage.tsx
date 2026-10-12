@@ -195,14 +195,19 @@ export default function FamilyCalendarPage() {
         nextEvents = [...prevEvents, newEv];
       }
       return { ...prev, calendarEvents: nextEvents };
-    });
+    }, editingEvent ? `가족 일정 [${saved.title}]을 수정했습니다. 📅` : `새로운 가족 일정 [${saved.title}]을 등록했습니다! 📅`);
   };
 
   const handleDeleteEvent = (id: string) => {
-    update((prev) => ({
-      ...prev,
-      calendarEvents: (prev.calendarEvents ?? []).filter((e) => e.id !== id),
-    }));
+    const target = (data.calendarEvents ?? []).find((e) => e.id === id);
+    const title = target?.title || '일정';
+    update(
+      (prev) => ({
+        ...prev,
+        calendarEvents: (prev.calendarEvents ?? []).filter((e) => e.id !== id),
+      }),
+      `가족 일정 [${title}]을 삭제했습니다.`,
+    );
   };
 
 

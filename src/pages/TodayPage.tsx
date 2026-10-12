@@ -64,6 +64,12 @@ export default function TodayPage() {
 
   const toggle = (planId: string) => {
     if (status !== 'today') return;
+    const currentRec = recordFor(data, today);
+    const targetItem = currentRec?.items.find((i) => i.planId === planId);
+    const isFinishing = targetItem ? !targetItem.done : true;
+    const subName = targetItem?.subjectName || '학습';
+    const summary = isFinishing ? `[${subName}] 완료했습니다! 🎉` : `[${subName}] 체크를 취소했습니다.`;
+
     update((prev) => {
       const rec = recordFor(prev, today)!;
       const items = rec.items.map((i) =>
@@ -80,7 +86,7 @@ export default function TodayPage() {
           },
         },
       };
-    });
+    }, summary);
   };
 
   const handleSaveChildMessage = (msg: string) => {
@@ -96,7 +102,7 @@ export default function TodayPage() {
           },
         },
       };
-    });
+    }, '아이의 일기/기록을 남겼습니다. 📝');
   };
 
   const handleSaveParentMessage = (msg: string) => {
@@ -112,7 +118,7 @@ export default function TodayPage() {
           },
         },
       };
-    });
+    }, '부모님의 응원 한마디가 도착했습니다! 💌');
   };
 
   const saveSpecialMission = ({

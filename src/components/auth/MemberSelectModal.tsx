@@ -3,6 +3,7 @@ import { Delete, ArrowLeft, LogOut, Shield, User } from 'lucide-react';
 import { useAuth } from '../../store/AuthContext';
 import { useParentAuth } from '../../store/ParentAuth';
 import type { FamilyMember } from '../../types';
+import { unlockAudio, requestSystemNotificationPermission } from '../../lib/sound';
 
 interface Props {
   members: FamilyMember[];
@@ -50,6 +51,8 @@ export default function MemberSelectModal({ members, onSelectMember }: Props) {
     if (!selectedMember || pin.length !== 4) return;
 
     if (pin === selectedMember.pin) {
+      unlockAudio();
+      requestSystemNotificationPermission().catch(() => {});
       onSelectMember(selectedMember);
     } else {
       setError(true);

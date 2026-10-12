@@ -3,6 +3,14 @@ import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import type { AppData, DaySchedule, WeekdayKey } from '../types';
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthContext';
+import { useParentAuth } from './ParentAuth';
+import {
+  playNotificationSound,
+  triggerNotificationVibration,
+  showSystemNotification,
+} from '../lib/sound';
+import PushBanner, { type PushBannerInfo } from '../components/ui/PushBanner';
+
 
 const STORAGE_KEY = 'study-notebook:v1';
 
@@ -110,8 +118,8 @@ interface StoreValue {
   initialLoaded: boolean;
   selectedChildId: string | null;
   setSelectedChildId: (id: string | null) => void;
-  update: (updater: (prev: AppData) => AppData) => void;
-  updateDay: (key: WeekdayKey, updater: (prev: DaySchedule) => DaySchedule) => void;
+  update: (updater: (prev: AppData) => AppData, summary?: string) => void;
+  updateDay: (key: WeekdayKey, updater: (prev: DaySchedule) => DaySchedule, summary?: string) => void;
   copyFromChild: (sourceChildId: string) => void;
   reset: () => void;
 }
@@ -120,9 +128,25 @@ const StoreContext = createContext<StoreValue | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { activeMember } = useParentAuth();
   const [data, setData] = useState<AppData>(loadLocal);
   const [syncing, setSyncing] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
+
+  // 현재 변경 작업자 정보 조회
+  const getUpdaterInfo = useCallback(() => {
+    let member = activeMember;
+    if (!member) {
+      try {
+        const raw = sessionStorage.getItem('study-notebook:active-member');
+        if (raw) member = JSON.parse(raw);
+      } catch {}
+    }
+    return {
+      updaterId: member?.id,
+      updaterName: member?.name || '가족 구성원',
+    };
+  }, [activeMember]);
 
   // 부모 모드 등에서 선택된 현재 관리 대상 아이 ID
   const [selectedChildIdState, setSelectedChildIdState] = useState<string | null>(() => {
@@ -138,12 +162,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setSelectedChildIdState(id);
   }, []);
 
+  // 푸시 배너 상태
+  const [pushBanner, setPushBanner] = useState<PushBannerInfo | null>(null);
+
   // Firestore 초기 로드가 완료되었는지 여부
   const initialFetchDoneRef = useRef(false);
   // 디바운스 타이머
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 본 기기에서 저장한 마지막 타임스탬프 (자신이 저장한 업데이트에는 알림 울리지 않도록 방지)
+  const lastLocalSaveTimeRef = useRef<string>('');
 
-  // 1) Firestore -> Local 동기화 (최초 로드 및 타 기기 실시간 변경 수신 - 읽기 전용)
+  // 1) Firestore -> Local 동기화 (최초 로드 및 타 기기 실시간 변경 수신)
   useEffect(() => {
     if (!user) {
       setInitialLoaded(true);
@@ -168,14 +197,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       (snap) => {
         clearTimeout(fallbackTimer);
         setSyncing(false);
-        initialFetchDoneRef.current = true;
-        setInitialLoaded(true);
 
         if (snap.exists()) {
           const remote = sanitize(snap.data());
+
+          // 최초 로드가 끝난 이후 타 기기/타 사용자로부터 들어온 원격 업데이트 감지
+          if (initialFetchDoneRef.current && remote.lastUpdatedBy) {
+            const remoteTime = remote.lastUpdatedBy.updatedAt;
+            const isFromSelf = remoteTime === lastLocalSaveTimeRef.current;
+
+            if (!isFromSelf) {
+              // 🔔 1. 사운드 재생 (딩-동)
+              playNotificationSound();
+              // 📳 2. 기기 진동
+              triggerNotificationVibration();
+              // 📢 3. 시스템 브라우저 푸시 알림
+              showSystemNotification(`${remote.lastUpdatedBy.updaterName} 님의 업데이트`, {
+                body: remote.lastUpdatedBy.summary,
+              });
+              // 🚀 4. 인앱 상단 플로팅 푸시 배너
+              setPushBanner({
+                id: 'banner-' + Date.now(),
+                updaterName: remote.lastUpdatedBy.updaterName,
+                summary: remote.lastUpdatedBy.summary,
+                time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+              });
+            }
+          }
+
+          initialFetchDoneRef.current = true;
+          setInitialLoaded(true);
           setData(remote);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
         } else {
+          initialFetchDoneRef.current = true;
+          setInitialLoaded(true);
           const initial = loadLocal();
           setDoc(ref, initial, { merge: true }).catch(console.error);
         }
@@ -194,6 +250,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       unsub();
     };
   }, [user?.uid]);
+
+  // 배너 5초 후 자동 사라짐
+  useEffect(() => {
+    if (!pushBanner) return;
+    const t = setTimeout(() => setPushBanner(null), 5000);
+    return () => clearTimeout(t);
+  }, [pushBanner]);
 
   // 2) 클라우드 저장 함수
   const persistToCloud = useCallback(
@@ -223,11 +286,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
+
   // 3) 사용자 변경 트리거 (update, updateDay, copyFromChild, reset)
   const update = useCallback(
-    (updater: (prev: AppData) => AppData) => {
+    (updater: (prev: AppData) => AppData, summary?: string) => {
       setData((prev) => {
         const next = updater(prev);
+        const { updaterId, updaterName } = getUpdaterInfo();
+        const nowIso = new Date().toISOString();
+        lastLocalSaveTimeRef.current = nowIso;
+
+        next.lastUpdatedBy = {
+          updatedAt: nowIso,
+          updaterId,
+          updaterName,
+          summary: summary || '정보를 업데이트했습니다.',
+        };
+
         // 만약 특정 아이가 선택된 상태라면, 해당 아이의 childrenData[selectedChildId]에도 동기화
         const activeChildId =
           selectedChildIdState ||
@@ -249,19 +324,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    [persistToCloud, selectedChildIdState],
+    [persistToCloud, selectedChildIdState, getUpdaterInfo],
   );
 
   const updateDay = useCallback(
-    (key: WeekdayKey, updater: (prev: DaySchedule) => DaySchedule) => {
+    (key: WeekdayKey, updater: (prev: DaySchedule) => DaySchedule, summary?: string) => {
       setData((prev) => {
         const nextWeek = {
           ...prev.week,
           [key]: updater(prev.week[key]),
         };
+        const { updaterId, updaterName } = getUpdaterInfo();
+        const nowIso = new Date().toISOString();
+        lastLocalSaveTimeRef.current = nowIso;
+
         const next: AppData = {
           ...prev,
           week: nextWeek,
+          lastUpdatedBy: {
+            updatedAt: nowIso,
+            updaterId,
+            updaterName,
+            summary: summary || '시간표 일정을 업데이트했습니다.',
+          },
         };
 
         const activeChildId =
@@ -284,7 +369,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    [persistToCloud, selectedChildIdState],
+    [persistToCloud, selectedChildIdState, getUpdaterInfo],
   );
 
   // 다른 아이의 과목/주간일정 정보를 현재 선택된 아이에게 복사/불러오기
@@ -298,10 +383,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           selectedChildIdState ||
           (prev.familyMembers ?? []).find((m) => m.role === 'child')?.id;
 
+        const sourceChild = (prev.familyMembers ?? []).find((m) => m.id === sourceChildId);
+        const sourceName = sourceChild?.name || '아이';
+
+        const { updaterId, updaterName } = getUpdaterInfo();
+        const nowIso = new Date().toISOString();
+        lastLocalSaveTimeRef.current = nowIso;
+
         const next: AppData = {
           ...prev,
           subjects: JSON.parse(JSON.stringify(sourceData.subjects)),
           week: JSON.parse(JSON.stringify(sourceData.week)),
+          lastUpdatedBy: {
+            updatedAt: nowIso,
+            updaterId,
+            updaterName,
+            summary: `${sourceName}의 과목/일정을 불러왔습니다.`,
+          },
         };
 
         if (activeChildId) {
@@ -320,7 +418,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    [persistToCloud, selectedChildIdState],
+    [persistToCloud, selectedChildIdState, getUpdaterInfo],
   );
 
   const reset = useCallback(() => {
@@ -361,6 +459,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         reset,
       }}
     >
+      <PushBanner banner={pushBanner} onDismiss={() => setPushBanner(null)} />
       {children}
     </StoreContext.Provider>
   );
