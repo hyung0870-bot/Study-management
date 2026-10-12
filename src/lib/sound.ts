@@ -39,7 +39,7 @@ export function unlockAudio() {
 export function playNotificationSound() {
   try {
     const ctx = getAudioContext();
-    if (!ctx) return;
+    if (!ctx || ctx.state !== 'running') return;
 
     const now = ctx.currentTime;
 
@@ -67,7 +67,7 @@ export function playNotificationSound() {
     osc2.start(now + 0.12);
     osc2.stop(now + 0.55);
   } catch (err) {
-    console.warn('Audio play failed:', err);
+    // 오디오 재생 실패 무시
   }
 }
 
@@ -79,8 +79,8 @@ export function triggerNotificationVibration() {
     if (typeof window !== 'undefined' && 'vibrate' in navigator) {
       navigator.vibrate([150, 80, 150]);
     }
-  } catch (err) {
-    console.warn('Vibration failed:', err);
+  } catch {
+    // 진동 실패 무시
   }
 }
 
@@ -101,12 +101,10 @@ export function showSystemNotification(title: string, options?: NotificationOpti
   try {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       new Notification(title, {
-        icon: '/favicon.ico',
-        badge: '/favicon.ico',
         ...options,
       });
     }
-  } catch (err) {
-    console.warn('System notification failed:', err);
+  } catch {
+    // 시스템 알림 실패 무시
   }
 }

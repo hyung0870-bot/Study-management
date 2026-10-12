@@ -181,10 +181,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Firestore 초기 로드가 완료되었는지 여부
   const initialFetchDoneRef = useRef(false);
+  // 컴포넌트 마운트 시점 기록 (과거 업데이트에 대한 오작동 알림 원천 차단)
+  const mountTimeRef = useRef<number>(Date.now());
   // 디바운스 타이머
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 본 기기에서 저장한 마지막 타임스탬프 (자신이 저장한 업데이트에는 알림 울리지 않도록 방지)
   const lastLocalSaveTimeRef = useRef<string>('');
+  // 이미 알림을 처리한 업데이트 타임스탬프 (동일 업데이트 중복 알림 방지)
+  const lastProcessedUpdateTimeRef = useRef<string>('');
 
   // 1) Firestore -> Local 동기화 (최초 로드 및 타 기기 실시간 변경 수신)
   useEffect(() => {
@@ -214,13 +218,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         if (snap.exists()) {
           const remote = sanitize(snap.data());
+          const isInitial = !initialFetchDoneRef.current;
 
-          // 최초 로드가 끝난 이후 타 기기/타 사용자로부터 들어온 원격 업데이트 감지
-          if (initialFetchDoneRef.current && remote.lastUpdatedBy) {
+          if (isInitial) {
+            // 최초 로드 시에는 과거 마지막 업데이트를 처리 완료로 등록만 하고 알림은 절대 울리지 않음
+            initialFetchDoneRef.current = true;
+            if (remote.lastUpdatedBy) {
+              lastProcessedUpdateTimeRef.current = remote.lastUpdatedBy.updatedAt;
+            }
+          } else if (remote.lastUpdatedBy) {
+            // 최초 로드 이후에 타 기기/타 사용자로부터 들어온 새로운 원격 업데이트 감지
             const remoteTime = remote.lastUpdatedBy.updatedAt;
-            const isFromSelf = remoteTime === lastLocalSaveTimeRef.current;
+            const remoteTimeMs = new Date(remoteTime).getTime();
 
-            if (!isFromSelf) {
+            const isAlreadyProcessed = remoteTime === lastProcessedUpdateTimeRef.current;
+            const isFromSelf = remoteTime === lastLocalSaveTimeRef.current;
+            const isPastUpdate = !isNaN(remoteTimeMs) && remoteTimeMs <= mountTimeRef.current;
+
+            if (!isAlreadyProcessed && !isFromSelf && !isPastUpdate) {
+              lastProcessedUpdateTimeRef.current = remoteTime;
+
               // 🔔 1. 사운드 재생 (딩-동)
               playNotificationSound();
               // 📳 2. 기기 진동
@@ -239,7 +256,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             }
           }
 
-          initialFetchDoneRef.current = true;
           setInitialLoaded(true);
 
           // 현재 세션에서 특정 아이를 선택하여 보고 있다면, 해당 아이의 데이터를 루트에 맞춰 렌더링
@@ -322,6 +338,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const { updaterId, updaterName } = getUpdaterInfo();
         const nowIso = new Date().toISOString();
         lastLocalSaveTimeRef.current = nowIso;
+        lastProcessedUpdateTimeRef.current = nowIso;
 
         next.lastUpdatedBy = {
           updatedAt: nowIso,
@@ -365,6 +382,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const { updaterId, updaterName } = getUpdaterInfo();
         const nowIso = new Date().toISOString();
         lastLocalSaveTimeRef.current = nowIso;
+        lastProcessedUpdateTimeRef.current = nowIso;
 
         const next: AppData = {
           ...prev,
@@ -465,6 +483,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const { updaterId, updaterName } = getUpdaterInfo();
         const nowIso = new Date().toISOString();
         lastLocalSaveTimeRef.current = nowIso;
+        lastProcessedUpdateTimeRef.current = nowIso;
 
         const next: AppData = {
           ...prev,
