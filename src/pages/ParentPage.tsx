@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, KeyRound, LogOut, CheckCircle2, AlertCircle, CalendarRange, Shapes, ChevronRight, Sparkles } from 'lucide-react';
+import { ArrowLeft, KeyRound, LogOut, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+
 import PageHeader from '../components/ui/PageHeader';
+import FamilyMemberList from '../components/parent/FamilyMemberList';
 import MonthCalendar from '../components/calendar/MonthCalendar';
 import DayDetailModal from '../components/parent/DayDetailModal';
 import ChangePinSheet from '../components/parent/ChangePinSheet';
@@ -10,8 +12,9 @@ import PinGate from '../components/parent/PinGate';
 import { useParentAuth } from '../store/ParentAuth';
 import { useAuth } from '../store/AuthContext';
 import { useStore } from '../store/StoreContext';
-import { toDateKey } from '../lib/date';
+import { toDateKey, uid } from '../lib/date';
 import { progressOf, recordFor, statusOf } from '../lib/records';
+import type { FamilyMember } from '../types';
 
 /** [E] 학부모 모드 */
 export default function ParentPage() {
@@ -24,6 +27,43 @@ export default function ParentPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
   const [aiModalOpen, setAiModalOpen] = useState(false);
+
+  // 가족 구성원 추가/수정/삭제 핸들러
+  const handleAddMember = (newMem: Omit<FamilyMember, 'id' | 'createdAt'>) => {
+    const member: FamilyMember = {
+      ...newMem,
+      id: 'member-' + uid(),
+      createdAt: new Date().toISOString(),
+    };
+    update((prev) => ({
+      ...prev,
+      familyMembers: [...(prev.familyMembers ?? []), member],
+    }));
+  };
+
+  const handleUpdateMember = (id: string, updates: Partial<FamilyMember>) => {
+    update((prev) => {
+      const nextMembers = (prev.familyMembers ?? []).map((m) =>
+        m.id === id ? { ...m, ...updates } : m,
+      );
+      // 만약 부모 비밀번호가 변경되었고 해당 구성원이 부모라면 parentPin도 동기화
+      const updatedMem = nextMembers.find((m) => m.id === id);
+      const nextParentPin = updatedMem?.role === 'parent' && updates.pin ? updates.pin : prev.parentPin;
+      return {
+        ...prev,
+        parentPin: nextParentPin,
+        familyMembers: nextMembers,
+      };
+    });
+  };
+
+  const handleDeleteMember = (id: string) => {
+    update((prev) => ({
+      ...prev,
+      familyMembers: (prev.familyMembers ?? []).filter((m) => m.id !== id),
+    }));
+  };
+
 
   // 이번 달의 통계 (완료일 / 미완료일)
   const stats = useMemo(() => {
@@ -134,38 +174,48 @@ export default function ParentPage() {
         </div>
       </div>
 
-      {/* 학습 설정 바로가기 */}
+      {/* 1. 가족 구성원 관리 */}
+      <div className="mb-4">
+        <FamilyMemberList
+          members={data.familyMembers ?? []}
+          onAddMember={handleAddMember}
+          onUpdateMember={handleUpdateMember}
+          onDeleteMember={handleDeleteMember}
+        />
+      </div>
+
+      {/* 바로가기 메뉴 */}
       <div className="mb-4 paper-card space-y-1.5 p-3">
-        <p className="px-1 text-xs font-bold text-ink-soft">학습 설정 바로가기</p>
-        <div className="grid grid-cols-2 gap-2">
+        <p className="px-1 text-xs font-bold text-ink-soft">주요 관리 메뉴 바로가기</p>
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => navigate('/family-calendar')}
+            className="flex flex-col items-start rounded-xl bg-slate-50 p-2.5 text-left transition-colors hover:bg-slate-100"
+          >
+            <span className="text-xl mb-1">📅</span>
+            <p className="text-xs font-bold text-ink">가족 달력</p>
+            <p className="text-[10px] text-ink-soft">생일/여행/기념일</p>
+          </button>
+
           <button
             type="button"
             onClick={() => navigate('/planner')}
-            className="flex items-center justify-between rounded-xl bg-slate-50 p-3 text-left transition-colors hover:bg-slate-100"
+            className="flex flex-col items-start rounded-xl bg-slate-50 p-2.5 text-left transition-colors hover:bg-slate-100"
           >
-            <span className="flex items-center gap-2">
-              <CalendarRange size={18} className="text-accent" />
-              <div>
-                <p className="text-sm font-bold text-ink">주간 계획</p>
-                <p className="text-[11px] text-ink-soft">일정 추가/수정</p>
-              </div>
-            </span>
-            <ChevronRight size={16} className="text-slate-300" />
+            <span className="text-xl mb-1">📋</span>
+            <p className="text-xs font-bold text-ink">주간 계획</p>
+            <p className="text-[10px] text-ink-soft">학습 계획 수정</p>
           </button>
 
           <button
             type="button"
             onClick={() => navigate('/subjects')}
-            className="flex items-center justify-between rounded-xl bg-slate-50 p-3 text-left transition-colors hover:bg-slate-100"
+            className="flex flex-col items-start rounded-xl bg-slate-50 p-2.5 text-left transition-colors hover:bg-slate-100"
           >
-            <span className="flex items-center gap-2">
-              <Shapes size={18} className="text-accent" />
-              <div>
-                <p className="text-sm font-bold text-ink">과목 관리</p>
-                <p className="text-[11px] text-ink-soft">과목 추가/수정</p>
-              </div>
-            </span>
-            <ChevronRight size={16} className="text-slate-300" />
+            <span className="text-xl mb-1">🎨</span>
+            <p className="text-xs font-bold text-ink">과목 관리</p>
+            <p className="text-[10px] text-ink-soft">과목/교재 관리</p>
           </button>
         </div>
       </div>

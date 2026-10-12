@@ -28,6 +28,11 @@ export function createDefaultData(): AppData {
     week,
     records: {},
     parentPin: '0000',
+    familyMembers: [
+      { id: 'member-parent-1', name: '부모님', role: 'parent', pin: '0000', avatar: '👨‍👩‍👦', createdAt: new Date().toISOString() },
+      { id: 'member-child-1', name: '아이', role: 'child', pin: '1234', avatar: '🎒', createdAt: new Date().toISOString() },
+    ],
+    calendarEvents: [],
   };
 }
 
@@ -48,6 +53,13 @@ function sanitize(raw: unknown): AppData {
     records: parsed.records ?? {},
     parentPin: parsed.parentPin ?? '0000',
     geminiApiKey: parsed.geminiApiKey,
+    familyMembers: Array.isArray(parsed.familyMembers) && parsed.familyMembers.length > 0
+      ? parsed.familyMembers
+      : [
+          { id: 'member-parent-1', name: '부모님', role: 'parent', pin: parsed.parentPin ?? '0000', avatar: '👨‍👩‍👦', createdAt: new Date().toISOString() },
+          { id: 'member-child-1', name: '아이', role: 'child', pin: '1234', avatar: '🎒', createdAt: new Date().toISOString() },
+        ],
+    calendarEvents: Array.isArray(parsed.calendarEvents) ? parsed.calendarEvents : [],
   };
 
   for (const key of Object.keys(data.week) as WeekdayKey[]) {

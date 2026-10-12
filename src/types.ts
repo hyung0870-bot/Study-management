@@ -71,6 +71,31 @@ export interface DailyRecord {
   parentMessage?: string; // 부모가 아이에게 남기는 한마디 / 응원 메시지
 }
 
+export type FamilyRole = 'parent' | 'child';
+
+export interface FamilyMember {
+  id: string;
+  name: string;
+  role: FamilyRole;
+  pin: string; // 4자리 숫자 PIN
+  avatar?: string;
+  createdAt?: string;
+}
+
+export type CalendarEventType = 'birthday' | 'trip' | 'anniversary' | 'other';
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  type: CalendarEventType;
+  startDate: DateKey; // 'YYYY-MM-DD'
+  endDate?: DateKey; // 'YYYY-MM-DD' (여행 등 기간 일정)
+  memo?: string;
+  createdById?: string; // 등록한 가족 구성원 ID 또는 이름
+  createdByName?: string;
+  createdAt: string; // ISO
+}
+
 export interface AppData {
   version: 1;
   subjects: Subject[];
@@ -78,5 +103,8 @@ export interface AppData {
   records: Record<DateKey, DailyRecord>;
   parentPin: string;
   geminiApiKey?: string;
+  familyMembers?: FamilyMember[];
+  calendarEvents?: CalendarEvent[];
 }
+
 

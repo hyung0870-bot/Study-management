@@ -2,10 +2,13 @@ import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'r
 import AppShell from './components/layout/AppShell';
 import LoginPage from './components/auth/LoginPage';
 import { AuthProvider, useAuth } from './store/AuthContext';
+
 import { StoreProvider } from './store/StoreContext';
-import { ParentAuthProvider } from './store/ParentAuth';
+import { ParentAuthProvider, useParentAuth } from './store/ParentAuth';
+
 import TodayPage from './pages/TodayPage';
 import TimetablePage from './pages/TimetablePage';
+import FamilyCalendarPage from './pages/FamilyCalendarPage';
 import PlannerPage from './pages/PlannerPage';
 import DayDetailPage from './pages/DayDetailPage';
 import SubjectsPage from './pages/SubjectsPage';
@@ -34,6 +37,49 @@ function EntryRoleRedirect() {
   return null;
 }
 
+import MemberSelectModal from './components/auth/MemberSelectModal';
+import { useStore } from './store/StoreContext';
+import type { FamilyMember } from './types';
+
+function MainApp() {
+  const { data } = useStore();
+  const { activeMember, setActiveMember, unlock } = useParentAuth();
+
+  const handleSelectMember = (member: FamilyMember) => {
+    setActiveMember(member);
+    if (member.role === 'parent') {
+      unlock(member);
+    }
+  };
+
+  if (!activeMember) {
+    return (
+      <MemberSelectModal
+        members={data.familyMembers ?? []}
+        onSelectMember={handleSelectMember}
+      />
+    );
+  }
+
+  return (
+    <HashRouter>
+      <EntryRoleRedirect />
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route index element={<TodayPage />} />
+          <Route path="timetable" element={<TimetablePage />} />
+          <Route path="family-calendar" element={<FamilyCalendarPage />} />
+          <Route path="planner" element={<PlannerPage />} />
+          <Route path="planner/:day" element={<DayDetailPage />} />
+          <Route path="subjects" element={<SubjectsPage />} />
+          <Route path="parent" element={<ParentPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </HashRouter>
+  );
+}
+
 function AuthenticatedApp() {
   const { user, loading } = useAuth();
 
@@ -52,20 +98,7 @@ function AuthenticatedApp() {
   return (
     <StoreProvider>
       <ParentAuthProvider>
-        <HashRouter>
-          <EntryRoleRedirect />
-          <Routes>
-            <Route element={<AppShell />}>
-              <Route index element={<TodayPage />} />
-              <Route path="timetable" element={<TimetablePage />} />
-              <Route path="planner" element={<PlannerPage />} />
-              <Route path="planner/:day" element={<DayDetailPage />} />
-              <Route path="subjects" element={<SubjectsPage />} />
-              <Route path="parent" element={<ParentPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
-        </HashRouter>
+        <MainApp />
       </ParentAuthProvider>
     </StoreProvider>
   );

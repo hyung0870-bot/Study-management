@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom';
-import { BookOpenCheck, Clock3, CalendarRange, Shapes } from 'lucide-react';
+import { BookOpenCheck, Clock3, CalendarRange, Shapes, CalendarDays } from 'lucide-react';
 
 const TABS = [
   { to: '/', label: '오늘 할 일', icon: BookOpenCheck, end: true },
   { to: '/timetable', label: '하루 시간표', icon: Clock3 },
+  { to: '/family-calendar', label: '가족 달력', icon: CalendarDays },
   { to: '/planner', label: '주간 계획', icon: CalendarRange },
   { to: '/subjects', label: '과목 관리', icon: Shapes },
 ];
@@ -14,7 +15,8 @@ export default function BottomNav() {
       className="sticky bottom-0 z-30 border-t border-slate-100 bg-white/90 backdrop-blur-md pb-[env(safe-area-inset-bottom)]"
       aria-label="주요 메뉴"
     >
-      <ul className="grid grid-cols-4">
+      <ul className="grid grid-cols-5">
+
         {TABS.map(({ to, label, icon: Icon, end }) => (
           <li key={to}>
             <NavLink

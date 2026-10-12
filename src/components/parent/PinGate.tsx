@@ -7,7 +7,7 @@ import { useParentAuth } from '../../store/ParentAuth';
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'] as const;
 
 interface PinGateProps {
-  onSuccess?: () => void;
+  onSuccess?: (member?: any) => void;
   isModal?: boolean;
 }
 
@@ -28,15 +28,20 @@ export default function PinGate({ onSuccess, isModal = false }: PinGateProps = {
 
   useEffect(() => {
     if (pin.length !== 4) return;
-    if (pin === data.parentPin) {
-      unlock();
-      onSuccess?.();
+    const parentMembers = (data.familyMembers ?? []).filter((m) => m.role === 'parent');
+    const matchedParent = parentMembers.find((m) => m.pin === pin);
+    const isValid = !!matchedParent || pin === data.parentPin;
+
+    if (isValid) {
+      unlock(matchedParent);
+      onSuccess?.(matchedParent);
     } else {
       setError(true);
       const t = setTimeout(() => setPin(''), 450);
       return () => clearTimeout(t);
     }
-  }, [pin, data.parentPin, unlock, onSuccess]);
+  }, [pin, data.parentPin, data.familyMembers, unlock, onSuccess]);
+
 
   // 키보드 입력 지원 (PC)
   useEffect(() => {

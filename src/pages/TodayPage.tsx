@@ -264,6 +264,47 @@ export default function TodayPage() {
         </div>
       )}
 
+      {/* 가족 달력 오늘/선택일정 배너 */}
+      {(() => {
+        const dayEvents = (data.calendarEvents ?? []).filter((ev) => {
+          if (ev.endDate) return selKey >= ev.startDate && selKey <= ev.endDate;
+          return ev.startDate === selKey;
+        });
+        if (dayEvents.length === 0) return null;
+
+        return (
+          <div className="paper-card mb-4 p-3 bg-gradient-to-r from-amber-50/80 to-rose-50/80 border border-amber-200/60 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-xs font-bold text-amber-950">
+                <span>🎉</span>
+                <span>가족 달력 특별 일정 ({dayEvents.length}건)</span>
+              </span>
+              <Link to="/family-calendar" className="text-[11px] font-bold text-accent hover:underline">
+                가족 달력 보기 →
+              </Link>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {dayEvents.map((ev) => {
+                const icon =
+                  ev.type === 'birthday' ? '🎂' : ev.type === 'trip' ? '✈️' : ev.type === 'anniversary' ? '🎉' : '📌';
+                return (
+                  <div
+                    key={ev.id}
+                    className="flex items-center gap-1.5 rounded-xl bg-white/90 px-2.5 py-1 text-xs font-bold shadow-2xs text-ink"
+                  >
+                    <span>{icon}</span>
+                    <span>{ev.title}</span>
+                    {ev.createdByName && (
+                      <span className="text-[10px] text-ink-soft">({ev.createdByName})</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 진행률 */}
       <div className="paper-card mb-4 p-4">
         <div className="mb-2 flex items-baseline justify-between">
