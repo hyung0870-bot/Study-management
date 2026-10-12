@@ -7,8 +7,9 @@ import ScheduleDetailModal, { type PlanEditAction } from '../components/timetabl
 import PinGateModal from '../components/parent/PinGateModal';
 import { useStore } from '../store/StoreContext';
 import { useParentAuth } from '../store/ParentAuth';
-import { WEEKDAYS, formatKoreanDate, toDateKey, uid, weekdayKeyOf } from '../lib/date';
+import { getDateOfWeekday, WEEKDAYS, formatKoreanDate, toDateKey, uid, weekdayKeyOf } from '../lib/date';
 import { buildBlocks, byStart, KIND_LABEL, type Block, type BlockKind } from '../lib/schedule';
+import { recordFor } from '../lib/records';
 import { FIXED_COLORS, SUBJECT_PALETTE, tint } from '../lib/colors';
 import { DAY_MIN, durationMin, formatDuration, formatTime, toSegments } from '../lib/time';
 import type { WeekdayKey } from '../types';
@@ -27,7 +28,18 @@ export default function TimetablePage() {
   const [emptySlot, setEmptySlot] = useState<{ start: string; end: string } | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
 
-  const blocks = useMemo(() => buildBlocks(data.week[dayKey], data.subjects), [data, dayKey]);
+  // 현재 선택된 요일의 실제 날짜 및 등록된 특별 미션 계산
+  const targetDate = useMemo(() => getDateOfWeekday(dayKey), [dayKey]);
+  const currentRecord = useMemo(() => recordFor(data, targetDate), [data, targetDate]);
+  const specialItems = useMemo(
+    () => currentRecord?.items.filter((it) => it.isSpecial) ?? [],
+    [currentRecord],
+  );
+
+  const blocks = useMemo(
+    () => buildBlocks(data.week[dayKey], data.subjects, specialItems),
+    [data, dayKey, specialItems],
+  );
   const list = [...blocks].sort(byStart);
 
   // 종류별 합계 (겹친 시간은 각각 계산)
@@ -102,7 +114,7 @@ export default function TimetablePage() {
         return { ...prev, [field]: nextItems };
       });
     } else if (action.type === 'save_special') {
-      // 특별 미션: 오늘 날짜 records에 등록 + 과목 관리에 특별 미션으로 추가
+      // 특별 미션: 현재 선택된 요일(날짜)의 records에 등록 + 과목 관리에 특별 미션으로 추가
       update((prev) => {
         let subject = prev.subjects.find((s) => s.name.trim() === action.activityName.trim());
         const nextSubjects = [...prev.subjects];
@@ -117,45 +129,88 @@ export default function TimetablePage() {
           nextSubjects.push(subject);
         }
 
-        const todayDateKey = toDateKey(new Date());
-        const currentRec = prev.records[todayDateKey] ?? { date: todayDateKey, items: [] };
-        const newItem = {
-          planId: uid(),
-          subjectId: subject.id,
-          subjectName: subject.name,
-          category: action.category,
-          color: subject.color,
-          amount: action.amount || '특별 미션',
-          start: action.start,
-          end: action.end,
-          minutes: durationMin(action.start, action.end),
-          done: false,
-          isSpecial: true,
-        };
+        const targetDateKey = toDateKey(targetDate);
+        const currentRec = prev.records[targetDateKey] ?? recordFor(prev, targetDate) ?? { date: targetDateKey, items: [] };
+
+        let nextItems = [...currentRec.items];
+        if (action.id) {
+          // 기존 특별 미션 수정
+          nextItems = nextItems.map((item) =>
+            item.planId === action.id
+              ? {
+                  ...item,
+                  subjectId: subject!.id,
+                  subjectName: subject!.name,
+                  category: subject!.category || action.category,
+                  color: subject!.color,
+                  amount: action.amount || '특별 미션',
+                  start: action.start,
+                  end: action.end,
+                  minutes: durationMin(action.start, action.end),
+                }
+              : item,
+          );
+        } else {
+          // 신규 추가
+          const newItem = {
+            planId: uid(),
+            subjectId: subject.id,
+            subjectName: subject.name,
+            category: subject.category || action.category,
+            color: subject.color,
+            amount: action.amount || '특별 미션',
+            start: action.start,
+            end: action.end,
+            minutes: durationMin(action.start, action.end),
+            done: false,
+            isSpecial: true,
+          };
+          nextItems.push(newItem);
+        }
 
         return {
           ...prev,
           subjects: nextSubjects,
           records: {
             ...prev.records,
-            [todayDateKey]: {
-              date: todayDateKey,
-              items: [...currentRec.items, newItem],
+            [targetDateKey]: {
+              ...currentRec,
+              date: targetDateKey,
+              items: nextItems,
             },
           },
         };
       });
     } else if (action.type === 'delete') {
-      updateDay(dayKey, (prev) => {
-        if (action.kind === 'study') {
-          return { ...prev, studies: prev.studies.filter((s) => s.id !== action.id) };
-        } else if (action.kind === 'academy') {
-          return { ...prev, academies: prev.academies.filter((a) => a.id !== action.id) };
-        } else if (action.kind === 'etc') {
-          return { ...prev, etc: prev.etc.filter((e) => e.id !== action.id) };
-        }
-        return prev;
-      });
+      if (action.isSpecial) {
+        // 특별 미션 삭제
+        update((prev) => {
+          const targetDateKey = toDateKey(targetDate);
+          const currentRec = prev.records[targetDateKey] ?? recordFor(prev, targetDate);
+          if (!currentRec) return prev;
+          return {
+            ...prev,
+            records: {
+              ...prev.records,
+              [targetDateKey]: {
+                ...currentRec,
+                items: currentRec.items.filter((it) => it.planId !== action.id),
+              },
+            },
+          };
+        });
+      } else {
+        updateDay(dayKey, (prev) => {
+          if (action.kind === 'study') {
+            return { ...prev, studies: prev.studies.filter((s) => s.id !== action.id) };
+          } else if (action.kind === 'academy') {
+            return { ...prev, academies: prev.academies.filter((a) => a.id !== action.id) };
+          } else if (action.kind === 'etc') {
+            return { ...prev, etc: prev.etc.filter((e) => e.id !== action.id) };
+          }
+          return prev;
+        });
+      }
     }
   };
 
@@ -265,9 +320,15 @@ export default function TimetablePage() {
                 >
                   <span className="h-8 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: b.color }} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-hand text-xl font-bold leading-6">
-                      {b.label}
-                      <span className="ml-1.5 align-middle text-[10px] font-normal text-ink-soft">{KIND_LABEL[b.kind]}</span>
+                    <p className="truncate font-hand text-xl font-bold leading-6 flex items-center">
+                      <span className="truncate">{b.label}</span>
+                      {b.isSpecial ? (
+                        <span className="ml-1.5 shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-sans font-bold text-amber-700">
+                          특별 미션
+                        </span>
+                      ) : (
+                        <span className="ml-1.5 align-middle text-[10px] font-normal text-ink-soft">{KIND_LABEL[b.kind]}</span>
+                      )}
                     </p>
                     {b.detail && <p className="truncate text-xs text-ink-soft">{b.detail}</p>}
                   </div>

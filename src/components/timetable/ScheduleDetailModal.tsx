@@ -10,7 +10,7 @@ export type PlanEditAction =
   | { type: 'save_study'; id?: string; subjectId: string; amount: string; start: HHMM; end: HHMM }
   | { type: 'save_special'; id?: string; activityName: string; category: string; amount: string; start: HHMM; end: HHMM }
   | { type: 'save_range'; kind: 'academy' | 'etc'; id?: string; name: string; start: HHMM; end: HHMM }
-  | { type: 'delete'; kind: BlockKind; id: string };
+  | { type: 'delete'; kind: BlockKind; id: string; isSpecial?: boolean };
 
 interface Props {
   open: boolean;
@@ -58,7 +58,12 @@ export default function ScheduleDetailModal({
     if (selectedBlock) {
       setStart(selectedBlock.start);
       setEnd(selectedBlock.end);
-      if (selectedBlock.kind === 'study') {
+      if (selectedBlock.isSpecial) {
+        setSpecialName(selectedBlock.label.replace(/^⭐\s*/, ''));
+        const sub = subjects.find((s) => s.name === selectedBlock.label.replace(/^⭐\s*/, ''));
+        if (sub?.category) setSpecialCategory(sub.category);
+        setAmount(selectedBlock.detail === '특별 미션' ? '' : selectedBlock.detail || '');
+      } else if (selectedBlock.kind === 'study') {
         const sub = subjects.find((s) => s.name === selectedBlock.label);
         if (sub) setSubjectId(sub.id);
         setAmount(selectedBlock.detail || '');
@@ -82,7 +87,17 @@ export default function ScheduleDetailModal({
     if (!valid) return;
 
     if (isEditing && selectedBlock) {
-      if (selectedBlock.kind === 'study') {
+      if (selectedBlock.isSpecial) {
+        onAction({
+          type: 'save_special',
+          id: selectedBlock.id,
+          activityName: specialName.trim() || selectedBlock.label.replace(/^⭐\s*/, ''),
+          category: specialCategory,
+          amount,
+          start,
+          end,
+        });
+      } else if (selectedBlock.kind === 'study') {
         onAction({
           type: 'save_study',
           id: selectedBlock.id,
@@ -139,6 +154,7 @@ export default function ScheduleDetailModal({
       type: 'delete',
       kind: selectedBlock.kind,
       id: selectedBlock.id,
+      isSpecial: selectedBlock.isSpecial,
     });
     onClose();
   };
@@ -225,7 +241,7 @@ export default function ScheduleDetailModal({
         )}
 
         {/* 1. 일반 공부 설정 */}
-        {(isEditing ? selectedBlock?.kind === 'study' : addType === 'regular_study') && (
+        {(isEditing ? selectedBlock?.kind === 'study' && !selectedBlock?.isSpecial : addType === 'regular_study') && (
           <div className="space-y-3">
             <div>
               <span className="mb-2 block text-xs font-bold text-ink-soft">활동 / 과목 선택</span>
@@ -268,7 +284,7 @@ export default function ScheduleDetailModal({
         )}
 
         {/* 2. 특별 미션 설정 */}
-        {!isEditing && addType === 'special_mission' && (
+        {(isEditing ? selectedBlock?.isSpecial : addType === 'special_mission') && (
           <div className="space-y-3">
             <Field label="활동 이름 (교재명)">
               <input

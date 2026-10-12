@@ -16,6 +16,25 @@ export function weekdayKeyOf(date: Date): WeekdayKey {
   return map[date.getDay()];
 }
 
+/** 이번 주의 특정 WeekdayKey에 해당하는 실제 Date 객체 계산 */
+export function getDateOfWeekday(dayKey: WeekdayKey, referenceDate: Date = new Date()): Date {
+  const weekdayOrder: Record<WeekdayKey, number> = {
+    mon: 1,
+    tue: 2,
+    wed: 3,
+    thu: 4,
+    fri: 5,
+    sat: 6,
+    sun: 7,
+  };
+  const currentDay = referenceDate.getDay() === 0 ? 7 : referenceDate.getDay();
+  const targetDay = weekdayOrder[dayKey];
+  const diffDays = targetDay - currentDay;
+  const targetDate = new Date(referenceDate);
+  targetDate.setDate(targetDate.getDate() + diffDays);
+  return targetDate;
+}
+
 export function toDateKey(date: Date): DateKey {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');

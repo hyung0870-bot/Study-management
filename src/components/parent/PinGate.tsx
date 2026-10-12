@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Delete, Lock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Delete, Lock } from 'lucide-react';
 import { useStore } from '../../store/StoreContext';
 import { useParentAuth } from '../../store/ParentAuth';
 
@@ -12,6 +13,7 @@ interface PinGateProps {
 
 /** 4자리 PIN 입력 화면 */
 export default function PinGate({ onSuccess, isModal = false }: PinGateProps = {}) {
+  const navigate = useNavigate();
   const { data } = useStore();
   const { unlock } = useParentAuth();
   const [pin, setPin] = useState('');
@@ -50,7 +52,7 @@ export default function PinGate({ onSuccess, isModal = false }: PinGateProps = {
     <div className={`animate-pop flex flex-col items-center ${isModal ? 'pt-2 pb-4' : 'pt-6'}`}>
       {!isModal && (
         <>
-          <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-ink text-white shadow-soft">
+          <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-soft">
             <Lock size={28} />
           </span>
           <h1 className="font-hand text-3xl font-bold">학부모 모드</h1>
@@ -66,7 +68,7 @@ export default function PinGate({ onSuccess, isModal = false }: PinGateProps = {
               error
                 ? 'border-rose-400 bg-rose-400'
                 : i < pin.length
-                  ? 'scale-110 border-ink bg-ink'
+                  ? 'scale-110 border-indigo-600 bg-indigo-600'
                   : 'border-slate-300 bg-white'
             }`}
           />
@@ -95,6 +97,17 @@ export default function PinGate({ onSuccess, isModal = false }: PinGateProps = {
       </div>
       {data.parentPin === '0000' && (
         <p className="mt-6 text-xs text-ink-soft">초기 비밀번호: 0000</p>
+      )}
+
+      {!isModal && (
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="mt-6 flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold text-ink-soft hover:bg-slate-100 hover:text-ink transition active:scale-95"
+        >
+          <ArrowLeft size={14} />
+          <span>학생 모드로 돌아가기</span>
+        </button>
       )}
     </div>
   );

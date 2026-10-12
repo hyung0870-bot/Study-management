@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { KeyRound, Lock, LogOut, CheckCircle2, AlertCircle, CalendarRange, Shapes, ChevronRight, Sparkles } from 'lucide-react';
+import { ArrowLeft, KeyRound, LogOut, CheckCircle2, AlertCircle, CalendarRange, Shapes, ChevronRight, Sparkles } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import MonthCalendar from '../components/calendar/MonthCalendar';
 import DayDetailModal from '../components/parent/DayDetailModal';
@@ -74,9 +74,10 @@ export default function ParentPage() {
               lock();
               navigate('/');
             }}
-            className="flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-xs text-ink-soft hover:bg-slate-200"
+            className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-ink-soft hover:bg-slate-200 hover:text-ink transition active:scale-95"
           >
-            <Lock size={14} /> 잠그기
+            <ArrowLeft size={14} />
+            <span>학생 모드로 전환</span>
           </button>
         }
       />

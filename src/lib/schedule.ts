@@ -1,4 +1,4 @@
-import type { DaySchedule, Subject, TimeRange, WeekdayKey } from '../types';
+import type { DailyRecordItem, DaySchedule, Subject, TimeRange, WeekdayKey } from '../types';
 import { FIXED_COLORS } from './colors';
 import { durationMin, rangesOverlap, toMin } from './time';
 
@@ -11,6 +11,7 @@ export interface Block extends TimeRange {
   label: string;
   detail?: string;
   color: string;
+  isSpecial?: boolean;
 }
 
 export const KIND_LABEL: Record<BlockKind, string> = {
@@ -21,7 +22,11 @@ export const KIND_LABEL: Record<BlockKind, string> = {
   study: '공부',
 };
 
-export function buildBlocks(day: DaySchedule, subjects: Subject[]): Block[] {
+export function buildBlocks(
+  day: DaySchedule,
+  subjects: Subject[],
+  specialItems?: DailyRecordItem[],
+): Block[] {
   const blocks: Block[] = [];
   if (day.sleep) blocks.push({ id: 'sleep', kind: 'sleep', label: '잠자기', color: FIXED_COLORS.sleep, ...day.sleep });
   if (day.school) blocks.push({ id: 'school', kind: 'school', label: '학교', color: FIXED_COLORS.school, ...day.school });
@@ -43,6 +48,22 @@ export function buildBlocks(day: DaySchedule, subjects: Subject[]): Block[] {
       end: s.end,
     });
   });
+
+  // 특별 미션 항목 반영
+  (specialItems ?? []).forEach((sp) => {
+    const sub = subjects.find((x) => x.id === sp.subjectId);
+    blocks.push({
+      id: sp.planId,
+      kind: 'study',
+      label: `⭐ ${sp.subjectName || sub?.name || '특별 미션'}`,
+      detail: sp.amount || '특별 미션',
+      color: sp.color || sub?.color || '#f59e0b',
+      start: sp.start,
+      end: sp.end,
+      isSpecial: true,
+    });
+  });
+
   return blocks.filter((b) => durationMin(b.start, b.end) > 0);
 }
 

@@ -1,4 +1,4 @@
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import AppShell from './components/layout/AppShell';
 import LoginPage from './components/auth/LoginPage';
 import { AuthProvider, useAuth } from './store/AuthContext';
@@ -10,6 +10,29 @@ import PlannerPage from './pages/PlannerPage';
 import DayDetailPage from './pages/DayDetailPage';
 import SubjectsPage from './pages/SubjectsPage';
 import ParentPage from './pages/ParentPage';
+
+import { useEffect } from 'react';
+
+function EntryRoleRedirect() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const entryRole = sessionStorage.getItem('study-notebook:entry-role');
+    if (!entryRole) return;
+    sessionStorage.removeItem('study-notebook:entry-role');
+
+    if (entryRole === 'parent') {
+      navigate('/parent', { replace: true });
+    } else if (entryRole === 'student') {
+      if (location.pathname.startsWith('/parent')) {
+        navigate('/', { replace: true });
+      }
+    }
+  }, [navigate, location]);
+
+  return null;
+}
 
 function AuthenticatedApp() {
   const { user, loading } = useAuth();
@@ -30,6 +53,7 @@ function AuthenticatedApp() {
     <StoreProvider>
       <ParentAuthProvider>
         <HashRouter>
+          <EntryRoleRedirect />
           <Routes>
             <Route element={<AppShell />}>
               <Route index element={<TodayPage />} />
