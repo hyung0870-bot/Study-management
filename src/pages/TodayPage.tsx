@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, Check, ChevronDown, PartyPopper, NotebookPen, Sparkles } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
@@ -9,7 +9,7 @@ import DayMessageCard from '../components/today/DayMessageCard';
 import { useStore } from '../store/StoreContext';
 import { useParentAuth } from '../store/ParentAuth';
 import { formatKoreanDate, toDateKey, uid } from '../lib/date';
-import { progressOf, recordFor, sameItems, statusOf } from '../lib/records';
+import { progressOf, recordFor, statusOf } from '../lib/records';
 import { SUBJECT_PALETTE, tint } from '../lib/colors';
 import { durationMin, formatDuration, formatTime } from '../lib/time';
 import { isEventOccurringOnDate } from '../lib/lunar';
@@ -58,13 +58,6 @@ export default function TodayPage() {
   const record = recordFor(data, selected);
   const { done, total, pct } = progressOf(record);
 
-  // 오늘 기록을 저장 → 날이 지나면 그대로 스냅샷으로 남음
-  const todayRecord = recordFor(data, today)!;
-  useEffect(() => {
-    if (todayRecord.items.length === 0 && !data.records[todayKey]) return;
-    if (sameItems(data.records[todayKey], todayRecord)) return;
-    update((prev) => ({ ...prev, records: { ...prev.records, [todayKey]: todayRecord } }));
-  }, [todayRecord, todayKey, data.records, update]);
 
   const toggle = (planId: string) => {
     if (status !== 'today' || !isChildMode) return;

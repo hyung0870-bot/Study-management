@@ -219,15 +219,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (snap.exists()) {
           const remote = sanitize(snap.data());
           const isInitial = !initialFetchDoneRef.current;
+          const isWarmingUp = Date.now() - mountTimeRef.current < 5000;
 
-          if (isInitial) {
-            // 최초 로드 시에는 과거 마지막 업데이트를 처리 완료로 등록만 하고 알림은 절대 울리지 않음
+          if (isInitial || isWarmingUp) {
+            // 최초 로드 및 초기 5초 안정화 기간에는 기존 업데이트를 등록만 하고 알림은 절대 울리지 않음
             initialFetchDoneRef.current = true;
             if (remote.lastUpdatedBy) {
               lastProcessedUpdateTimeRef.current = remote.lastUpdatedBy.updatedAt;
             }
           } else if (remote.lastUpdatedBy) {
-            // 최초 로드 이후에 타 기기/타 사용자로부터 들어온 새로운 원격 업데이트 감지
+            // 안정화 완료 이후 타 기기/타 사용자로부터 들어온 새로운 원격 업데이트 감지
             const remoteTime = remote.lastUpdatedBy.updatedAt;
             const remoteTimeMs = new Date(remoteTime).getTime();
 
@@ -259,9 +260,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           setInitialLoaded(true);
 
           // 현재 세션에서 특정 아이를 선택하여 보고 있다면, 해당 아이의 데이터를 루트에 맞춰 렌더링
-          const currentChildId =
-            sessionStorage.getItem('study-notebook:selected-child-id') ||
-            (remote.familyMembers ?? []).find((m) => m.role === 'child')?.id;
+          let currentChildId: string | null = null;
+          try {
+            const rawActive = sessionStorage.getItem('study-notebook:active-member');
+            if (rawActive) {
+              const active = JSON.parse(rawActive);
+              if (active?.role === 'child') {
+                currentChildId = active.id;
+              }
+            }
+          } catch {}
+
+          if (!currentChildId) {
+            currentChildId =
+              sessionStorage.getItem('study-notebook:selected-child-id') ||
+              selectedChildIdState ||
+              (remote.familyMembers ?? []).find((m) => m.role === 'child')?.id ||
+              null;
+          }
 
           if (currentChildId && remote.childrenData?.[currentChildId]) {
             const childData = remote.childrenData[currentChildId];
@@ -300,6 +316,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const t = setTimeout(() => setPushBanner(null), 5000);
     return () => clearTimeout(t);
   }, [pushBanner]);
+
+  // activeMember가 아이인 경우, 해당 아이의 study data로 루트를 즉시 동기화
+  useEffect(() => {
+    if (activeMember?.role === 'child') {
+      const childId = activeMember.id;
+      sessionStorage.setItem('study-notebook:selected-child-id', childId);
+      setSelectedChildIdState(childId);
+
+      setData((prev) => {
+        const childData = prev.childrenData?.[childId];
+        if (!childData) return prev;
+        return {
+          ...prev,
+          subjects: childData.subjects,
+          week: childData.week,
+          records: childData.records ?? {},
+        };
+      });
+    }
+  }, [activeMember?.id, activeMember?.role]);
 
   // 2) 클라우드 저장 함수
   const persistToCloud = useCallback(
@@ -348,10 +384,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         };
 
         // 만약 특정 아이가 선택된 상태라면, 해당 아이의 childrenData[activeChildId]에도 동기화
-        const activeChildId =
-          selectedChildIdState ||
-          sessionStorage.getItem('study-notebook:selected-child-id') ||
-          (next.familyMembers ?? []).find((m) => m.role === 'child')?.id;
+        let activeChildId = activeMember?.role === 'child' ? activeMember.id : null;
+        if (!activeChildId) {
+          activeChildId =
+            selectedChildIdState ||
+            sessionStorage.getItem('study-notebook:selected-child-id') ||
+            (next.familyMembers ?? []).find((m) => m.role === 'child')?.id ||
+            null;
+        }
 
         if (activeChildId) {
           const nextChildrenData = {
@@ -369,7 +409,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    [persistToCloud, selectedChildIdState, getUpdaterInfo],
+    [persistToCloud, selectedChildIdState, getUpdaterInfo, activeMember],
   );
 
   const updateDay = useCallback(
@@ -395,10 +435,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           },
         };
 
-        const activeChildId =
-          selectedChildIdState ||
-          sessionStorage.getItem('study-notebook:selected-child-id') ||
-          (next.familyMembers ?? []).find((m) => m.role === 'child')?.id;
+        let activeChildId = activeMember?.role === 'child' ? activeMember.id : null;
+        if (!activeChildId) {
+          activeChildId =
+            selectedChildIdState ||
+            sessionStorage.getItem('study-notebook:selected-child-id') ||
+            (next.familyMembers ?? []).find((m) => m.role === 'child')?.id ||
+            null;
+        }
 
         if (activeChildId) {
           const nextChildrenData = {
@@ -416,21 +460,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    [persistToCloud, selectedChildIdState, getUpdaterInfo],
+    [persistToCloud, selectedChildIdState, getUpdaterInfo, activeMember],
   );
 
   // 대상 아이 선택 및 전환 (이전 아이 상태 자동 보존 + 새 아이 데이터 로드)
   const selectChild = useCallback(
     (targetChildId: string) => {
+      const prevChildId =
+        selectedChildIdState ||
+        sessionStorage.getItem('study-notebook:selected-child-id') ||
+        null;
+
       sessionStorage.setItem('study-notebook:selected-child-id', targetChildId);
       setSelectedChildIdState(targetChildId);
 
       setData((prev) => {
-        const prevChildId =
-          selectedChildIdState ||
-          sessionStorage.getItem('study-notebook:selected-child-id') ||
-          (prev.familyMembers ?? []).find((m) => m.role === 'child')?.id;
-
         const nextChildrenData = { ...(prev.childrenData ?? {}) };
 
         // 1. 현재 보고 있던 루트의 데이터를 이전 아이의 childrenData에 저장
