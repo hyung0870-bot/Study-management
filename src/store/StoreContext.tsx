@@ -87,17 +87,30 @@ function sanitize(raw: unknown): AppData {
     data.week[key] = d;
   }
 
-  // 첫 번째 아이의 childrenData가 비어있다면, 기존 루트의 학습 데이터를 첫 번째 아이 데이터로 마이그레이션
-  const firstChild = (data.familyMembers ?? []).find((m) => m.role === 'child');
-  if (firstChild && !data.childrenData?.[firstChild.id]) {
-    data.childrenData = {
-      ...(data.childrenData ?? {}),
-      [firstChild.id]: {
+  // 아이별 childrenData 초기화 및 독립된 records 보장
+  const children = (data.familyMembers ?? []).filter((m) => m.role === 'child');
+  if (children.length > 0) {
+    const nextChildrenData = { ...(data.childrenData ?? {}) };
+    // 첫 번째 아이의 데이터가 없으면 루트의 기존 데이터로 마이그레이션
+    const firstChild = children[0];
+    if (firstChild && !nextChildrenData[firstChild.id]) {
+      nextChildrenData[firstChild.id] = {
         subjects: data.subjects,
         week: data.week,
         records: data.records,
-      },
-    };
+      };
+    }
+    // 그 외 아이들은 독립된 빈 records {} 보장
+    for (const child of children) {
+      if (!nextChildrenData[child.id]) {
+        nextChildrenData[child.id] = {
+          subjects: data.subjects,
+          week: data.week,
+          records: {},
+        };
+      }
+    }
+    data.childrenData = nextChildrenData;
   }
 
   return data;
@@ -118,6 +131,7 @@ interface StoreValue {
   initialLoaded: boolean;
   selectedChildId: string | null;
   setSelectedChildId: (id: string | null) => void;
+  selectChild: (childId: string) => void;
   update: (updater: (prev: AppData) => AppData, summary?: string) => void;
   updateDay: (key: WeekdayKey, updater: (prev: DaySchedule) => DaySchedule, summary?: string) => void;
   copyFromChild: (sourceChildId: string) => void;
@@ -227,6 +241,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
           initialFetchDoneRef.current = true;
           setInitialLoaded(true);
+
+          // 현재 세션에서 특정 아이를 선택하여 보고 있다면, 해당 아이의 데이터를 루트에 맞춰 렌더링
+          const currentChildId =
+            sessionStorage.getItem('study-notebook:selected-child-id') ||
+            (remote.familyMembers ?? []).find((m) => m.role === 'child')?.id;
+
+          if (currentChildId && remote.childrenData?.[currentChildId]) {
+            const childData = remote.childrenData[currentChildId];
+            remote.subjects = childData.subjects;
+            remote.week = childData.week;
+            remote.records = childData.records ?? {};
+          }
+
           setData(remote);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
         } else {
@@ -303,9 +330,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           summary: summary || '정보를 업데이트했습니다.',
         };
 
-        // 만약 특정 아이가 선택된 상태라면, 해당 아이의 childrenData[selectedChildId]에도 동기화
+        // 만약 특정 아이가 선택된 상태라면, 해당 아이의 childrenData[activeChildId]에도 동기화
         const activeChildId =
           selectedChildIdState ||
+          sessionStorage.getItem('study-notebook:selected-child-id') ||
           (next.familyMembers ?? []).find((m) => m.role === 'child')?.id;
 
         if (activeChildId) {
@@ -351,6 +379,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         const activeChildId =
           selectedChildIdState ||
+          sessionStorage.getItem('study-notebook:selected-child-id') ||
           (next.familyMembers ?? []).find((m) => m.role === 'child')?.id;
 
         if (activeChildId) {
@@ -372,6 +401,52 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [persistToCloud, selectedChildIdState, getUpdaterInfo],
   );
 
+  // 대상 아이 선택 및 전환 (이전 아이 상태 자동 보존 + 새 아이 데이터 로드)
+  const selectChild = useCallback(
+    (targetChildId: string) => {
+      sessionStorage.setItem('study-notebook:selected-child-id', targetChildId);
+      setSelectedChildIdState(targetChildId);
+
+      setData((prev) => {
+        const prevChildId =
+          selectedChildIdState ||
+          sessionStorage.getItem('study-notebook:selected-child-id') ||
+          (prev.familyMembers ?? []).find((m) => m.role === 'child')?.id;
+
+        const nextChildrenData = { ...(prev.childrenData ?? {}) };
+
+        // 1. 현재 보고 있던 루트의 데이터를 이전 아이의 childrenData에 저장
+        if (prevChildId && prevChildId !== targetChildId) {
+          nextChildrenData[prevChildId] = {
+            subjects: prev.subjects,
+            week: prev.week,
+            records: prev.records,
+          };
+        }
+
+        // 2. 대상 아이의 childrenData를 루트로 승격 (없으면 빈 records)
+        const targetData = nextChildrenData[targetChildId] || {
+          subjects: prev.subjects,
+          week: prev.week,
+          records: {},
+        };
+        nextChildrenData[targetChildId] = targetData;
+
+        const next: AppData = {
+          ...prev,
+          subjects: targetData.subjects,
+          week: targetData.week,
+          records: targetData.records ?? {},
+          childrenData: nextChildrenData,
+        };
+
+        persistToCloud(next);
+        return next;
+      });
+    },
+    [persistToCloud, selectedChildIdState],
+  );
+
   // 다른 아이의 과목/주간일정 정보를 현재 선택된 아이에게 복사/불러오기
   const copyFromChild = useCallback(
     (sourceChildId: string) => {
@@ -381,6 +456,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         const activeChildId =
           selectedChildIdState ||
+          sessionStorage.getItem('study-notebook:selected-child-id') ||
           (prev.familyMembers ?? []).find((m) => m.role === 'child')?.id;
 
         const sourceChild = (prev.familyMembers ?? []).find((m) => m.id === sourceChildId);
@@ -453,6 +529,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         initialLoaded,
         selectedChildId: selectedChildIdState,
         setSelectedChildId,
+        selectChild,
         update,
         updateDay,
         copyFromChild,

@@ -13,7 +13,7 @@ import { useStore } from '../../store/StoreContext';
  */
 export default function AppShell() {
   const { unlocked, activeMember, clearActiveMember } = useParentAuth();
-  const { syncing, data, selectedChildId, setSelectedChildId, update, copyFromChild } = useStore();
+  const { syncing, data, selectedChildId, selectChild, copyFromChild } = useStore();
   const { pathname } = useLocation();
   const inParent = pathname.startsWith('/parent');
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -106,19 +106,7 @@ export default function AppShell() {
                         type="button"
                         onClick={() => {
                           if (isSelected) return;
-                          // 1. 현재 보고 있던 내용 저장 후 새 아이의 데이터로 교체
-                          const newChildData = data.childrenData?.[child.id] || {
-                            subjects: data.subjects,
-                            week: data.week,
-                            records: data.records,
-                          };
-                          setSelectedChildId(child.id);
-                          update((prev) => ({
-                            ...prev,
-                            subjects: newChildData.subjects,
-                            week: newChildData.week,
-                            records: newChildData.records,
-                          }));
+                          selectChild(child.id);
                         }}
                         className={`flex items-center gap-1 rounded-full px-2.5 py-1 font-bold transition-all shrink-0 ${
                           isSelected

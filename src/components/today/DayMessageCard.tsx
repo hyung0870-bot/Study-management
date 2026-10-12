@@ -5,6 +5,7 @@ interface Props {
   dateLabel: string;
   isToday: boolean;
   unlocked: boolean;
+  childName?: string;
   childMessage?: string;
   parentMessage?: string;
   onSaveChildMessage: (msg: string) => void;
@@ -16,6 +17,7 @@ export default function DayMessageCard({
   dateLabel,
   isToday,
   unlocked,
+  childName,
   childMessage = '',
   parentMessage = '',
   onSaveChildMessage,
@@ -43,7 +45,7 @@ export default function DayMessageCard({
       <div className="flex items-center justify-between border-b border-slate-100 pb-2">
         <span className="flex items-center gap-1.5 font-hand text-xl font-bold text-ink">
           <MessageCircle size={18} className="text-accent" />
-          <span>오늘의 대화 우체통</span>
+          <span>{childName ? `${childName}와의 대화 우체통` : '오늘의 대화 우체통'}</span>
         </span>
         <span className="text-[11px] text-ink-muted">{dateLabel}</span>
       </div>
@@ -52,7 +54,7 @@ export default function DayMessageCard({
       <div className="rounded-2xl bg-amber-50/70 p-3 ring-1 ring-amber-200/50">
         <div className="flex items-center justify-between mb-1.5">
           <span className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
-            <span>🧒</span> 아이의 한마디 (부모님께)
+            <span>🧒</span> {childName ? `${childName}의 한마디` : '아이의 한마디'} (부모님께)
           </span>
           {isToday && !editingChild && (
             <button

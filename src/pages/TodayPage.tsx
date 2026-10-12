@@ -18,8 +18,12 @@ import type { DailyRecordItem } from '../types';
 
 /** [C] 매일의 학업 체크리스트 (메인) */
 export default function TodayPage() {
-  const { data, update } = useStore();
-  const { unlocked } = useParentAuth();
+  const { data, update, selectedChildId } = useStore();
+  const { activeMember, unlocked } = useParentAuth();
+  const isChildMode = activeMember?.role === 'child';
+  const currentChild = (data.familyMembers ?? []).find(
+    (m) => m.id === (selectedChildId || (data.familyMembers ?? []).find((c) => c.role === 'child')?.id),
+  );
   const [selected, setSelected] = useState(() => new Date());
   const [calOpen, setCalOpen] = useState(false);
   const [specialModalOpen, setSpecialModalOpen] = useState(false);
@@ -63,7 +67,7 @@ export default function TodayPage() {
   }, [todayRecord, todayKey, data.records, update]);
 
   const toggle = (planId: string) => {
-    if (status !== 'today') return;
+    if (status !== 'today' || !isChildMode) return;
     const currentRec = recordFor(data, today);
     const targetItem = currentRec?.items.find((i) => i.planId === planId);
     const isFinishing = targetItem ? !targetItem.done : true;
@@ -341,6 +345,7 @@ export default function TodayPage() {
         dateLabel={formatKoreanDate(selected)}
         isToday={status === 'today'}
         unlocked={unlocked}
+        childName={currentChild?.name}
         childMessage={record?.childMessage}
         parentMessage={record?.parentMessage}
         onSaveChildMessage={handleSaveChildMessage}
@@ -364,7 +369,7 @@ export default function TodayPage() {
       ) : (
         <ul className="space-y-2.5">
           {record.items.map((it, i) => {
-            const checkable = status === 'today';
+            const checkable = status === 'today' && isChildMode;
             const isSpecialEditable = it.isSpecial;
             return (
               <li key={it.planId} className="animate-pop" style={{ animationDelay: `${i * 30}ms` }}>
@@ -407,15 +412,18 @@ export default function TodayPage() {
                     </p>
                   </div>
 
-                  {/* 체크박스 버튼: 체크/해제 전용 */}
+                  {/* 체크박스 버튼: 아이 모드에서만 쓰기 활성화, 부모 모드는 읽기 전용 */}
                   <button
                     type="button"
                     disabled={!checkable}
-                    onClick={() => toggle(it.planId)}
-                    aria-label={it.done ? `${it.subjectName} 완료 취소` : `${it.subjectName} 완료 체크`}
+                    onClick={() => checkable && toggle(it.planId)}
+                    aria-label={it.done ? `${it.subjectName} 완료` : `${it.subjectName} 미완료`}
+                    title={!isChildMode ? '체크박스는 아이 모드에서만 체크할 수 있어요' : (it.done ? '완료 취소' : '완료 체크')}
                     className={`mr-4 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 transition-all ${
-                      it.done ? 'scale-105 border-emerald-400 bg-emerald-400 text-white' : 'border-slate-300 bg-white hover:border-slate-400'
-                    } ${checkable ? 'cursor-pointer active:scale-95' : 'cursor-default opacity-40'}`}
+                      it.done
+                        ? 'border-emerald-400 bg-emerald-400 text-white'
+                        : 'border-slate-300 bg-white'
+                    } ${checkable ? 'cursor-pointer hover:border-slate-400 active:scale-95' : 'cursor-default opacity-80'}`}
                   >
                     {it.done && <Check size={20} strokeWidth={3} />}
                   </button>
@@ -430,6 +438,11 @@ export default function TodayPage() {
         <div className="animate-pop mt-4 flex items-center justify-center gap-2 font-hand text-2xl font-bold text-emerald-500">
           <PartyPopper /> 오늘 공부 끝!
         </div>
+      )}
+      {status === 'today' && !isChildMode && total > 0 && (
+        <p className="mt-4 text-center text-xs text-ink-soft bg-amber-50/60 rounded-xl py-2 px-3 border border-amber-200/50">
+          ℹ️ 체크박스 쓰기(완료 체크)는 <strong>아이 모드</strong>에서만 가능합니다. (부모 모드는 확인 전용)
+        </p>
       )}
       {status !== 'today' && total > 0 && (
         <p className="mt-4 text-center text-xs text-ink-soft">
