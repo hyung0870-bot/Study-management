@@ -98,21 +98,49 @@ export default function TimetablePage() {
     if (!unlocked) return;
 
     if (action.type === 'save_study') {
-      updateDay(dayKey, (prev) => {
-        const nextStudies = action.id
-          ? prev.studies.map((s) => (s.id === action.id ? { ...s, ...action } : s))
-          : [...prev.studies, { id: uid(), ...action }];
-        return { ...prev, studies: nextStudies };
-      });
+      updateDay(
+        dayKey,
+        (prev) => {
+          const nextStudies = action.id
+            ? prev.studies.map((s) =>
+                s.id === action.id
+                  ? { id: s.id, subjectId: action.subjectId, amount: action.amount, start: action.start, end: action.end }
+                  : s,
+              )
+            : [
+                ...prev.studies,
+                { id: uid(), subjectId: action.subjectId, amount: action.amount, start: action.start, end: action.end },
+              ];
+          return { ...prev, studies: nextStudies };
+        },
+        '공부 일정을 수정했습니다.',
+      );
     } else if (action.type === 'save_range') {
       const field = action.kind === 'academy' ? 'academies' : 'etc';
-      updateDay(dayKey, (prev) => {
-        const items = prev[field];
-        const nextItems = action.id
-          ? items.map((x) => (x.id === action.id ? { ...x, name: action.name, start: action.start, end: action.end } : x))
-          : [...items, { id: uid(), name: action.name, start: action.start, end: action.end }];
-        return { ...prev, [field]: nextItems };
-      });
+      updateDay(
+        dayKey,
+        (prev) => {
+          const items = prev[field];
+          const nextItems = action.id
+            ? items.map((x) =>
+                x.id === action.id
+                  ? { id: x.id, name: action.name, start: action.start, end: action.end }
+                  : x,
+              )
+            : [...items, { id: uid(), name: action.name, start: action.start, end: action.end }];
+          return { ...prev, [field]: nextItems };
+        },
+        `${action.name} 일정을 수정했습니다.`,
+      );
+    } else if (action.type === 'save_fixed') {
+      updateDay(
+        dayKey,
+        (prev) => ({
+          ...prev,
+          [action.kind]: { start: action.start, end: action.end },
+        }),
+        `${action.kind === 'school' ? '학교 등하교' : '수면'} 시간을 수정했습니다.`,
+      );
     } else if (action.type === 'save_special') {
       // 특별 미션: 현재 선택된 요일(날짜)의 records에 등록 + 과목 관리에 특별 미션으로 추가
       update((prev) => {
@@ -180,7 +208,7 @@ export default function TimetablePage() {
             },
           },
         };
-      });
+      }, '특별 미션 일정을 수정했습니다. ⭐');
     } else if (action.type === 'delete') {
       if (action.isSpecial) {
         // 특별 미션 삭제
@@ -198,7 +226,7 @@ export default function TimetablePage() {
               },
             },
           };
-        });
+        }, '특별 미션 일정을 삭제했습니다.');
       } else {
         updateDay(dayKey, (prev) => {
           if (action.kind === 'study') {
@@ -207,9 +235,13 @@ export default function TimetablePage() {
             return { ...prev, academies: prev.academies.filter((a) => a.id !== action.id) };
           } else if (action.kind === 'etc') {
             return { ...prev, etc: prev.etc.filter((e) => e.id !== action.id) };
+          } else if (action.kind === 'school') {
+            return { ...prev, school: null };
+          } else if (action.kind === 'sleep') {
+            return { ...prev, sleep: null };
           }
           return prev;
-        });
+        }, '일정을 삭제했습니다.');
       }
     }
   };
@@ -347,7 +379,15 @@ export default function TimetablePage() {
 
       {/* 일정 상세 편집/추가 모달 */}
       <ScheduleDetailModal
-        key={modalTargetBlock?.id ?? emptySlot?.start ?? 'new'}
+        key={
+          modalOpen
+            ? modalTargetBlock
+              ? `edit-${modalTargetBlock.id}-${modalTargetBlock.start}-${modalTargetBlock.end}`
+              : emptySlot
+              ? `add-${emptySlot.start}-${emptySlot.end}`
+              : 'open'
+            : 'closed'
+        }
         open={modalOpen}
         selectedBlock={modalTargetBlock}
         emptyTimeSlot={emptySlot}

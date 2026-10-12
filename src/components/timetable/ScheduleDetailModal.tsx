@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Sheet from '../ui/Sheet';
 import { Field, TimeRangeInput } from '../ui/Inputs';
 import { tint } from '../../lib/colors';
@@ -10,6 +10,7 @@ export type PlanEditAction =
   | { type: 'save_study'; id?: string; subjectId: string; amount: string; start: HHMM; end: HHMM }
   | { type: 'save_special'; id?: string; activityName: string; category: string; amount: string; start: HHMM; end: HHMM }
   | { type: 'save_range'; kind: 'academy' | 'etc'; id?: string; name: string; start: HHMM; end: HHMM }
+  | { type: 'save_fixed'; kind: 'school' | 'sleep'; start: HHMM; end: HHMM }
   | { type: 'delete'; kind: BlockKind; id: string; isSpecial?: boolean };
 
 interface Props {
@@ -53,8 +54,9 @@ export default function ScheduleDetailModal({
   const [start, setStart] = useState('16:00');
   const [end, setEnd] = useState('16:30');
 
-  // 모달이 열릴 때 상태 초기화
-  useState(() => {
+  // 모달이 열리거나 대상 블록이 바뀔 때 폼 상태 정확히 초기화
+  useEffect(() => {
+    if (!open) return;
     if (selectedBlock) {
       setStart(selectedBlock.start);
       setEnd(selectedBlock.end);
@@ -65,7 +67,11 @@ export default function ScheduleDetailModal({
         setAmount(selectedBlock.detail === '특별 미션' ? '' : selectedBlock.detail || '');
       } else if (selectedBlock.kind === 'study') {
         const sub = subjects.find((s) => s.name === selectedBlock.label);
-        if (sub) setSubjectId(sub.id);
+        if (sub) {
+          setSubjectId(sub.id);
+        } else if (subjects[0]) {
+          setSubjectId(subjects[0].id);
+        }
         setAmount(selectedBlock.detail || '');
       } else {
         setRangeName(selectedBlock.label || '');
@@ -76,8 +82,9 @@ export default function ScheduleDetailModal({
       setAmount('');
       setSpecialName('');
       setRangeName('');
+      if (subjects[0]) setSubjectId(subjects[0].id);
     }
-  });
+  }, [open, selectedBlock, emptyTimeSlot, subjects]);
 
   if (!open) return null;
 
@@ -112,6 +119,13 @@ export default function ScheduleDetailModal({
           kind: selectedBlock.kind,
           id: selectedBlock.id,
           name: rangeName.trim() || selectedBlock.label,
+          start,
+          end,
+        });
+      } else if (selectedBlock.kind === 'school' || selectedBlock.kind === 'sleep') {
+        onAction({
+          type: 'save_fixed',
+          kind: selectedBlock.kind,
           start,
           end,
         });
@@ -336,6 +350,16 @@ export default function ScheduleDetailModal({
               onChange={(e) => setRangeName(e.target.value)}
             />
           </Field>
+        )}
+
+        {/* 4. 학교 / 수면 일정 설정 */}
+        {isEditing && (selectedBlock?.kind === 'school' || selectedBlock?.kind === 'sleep') && (
+          <div className="rounded-xl bg-slate-50 p-3 text-xs text-ink-soft border border-slate-200/60">
+            <p className="font-bold text-ink mb-1">
+              {selectedBlock.kind === 'school' ? '🏫 학교 등하교 시간' : '🌙 취침 및 기상 시간'}
+            </p>
+            <p>아래에서 시작 시간과 끝 시간을 설정해 주세요.</p>
+          </div>
         )}
 
         {/* 공통 시간 설정 */}
