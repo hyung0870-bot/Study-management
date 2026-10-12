@@ -29,17 +29,45 @@ export default function ParentPage() {
   const [aiModalOpen, setAiModalOpen] = useState(false);
 
   // 가족 구성원 추가/수정/삭제 핸들러
-  const handleAddMember = (newMem: Omit<FamilyMember, 'id' | 'createdAt'>) => {
+  const handleAddMember = (
+    newMem: Omit<FamilyMember, 'id' | 'createdAt'>,
+    copyFromChildId?: string,
+  ) => {
+    const memberId = 'member-' + uid();
     const member: FamilyMember = {
       ...newMem,
-      id: 'member-' + uid(),
+      id: memberId,
       createdAt: new Date().toISOString(),
     };
-    update((prev) => ({
-      ...prev,
-      familyMembers: [...(prev.familyMembers ?? []), member],
-    }));
+    update((prev) => {
+      let initialStudyData = {
+        subjects: prev.subjects,
+        week: prev.week,
+        records: {},
+      };
+
+      if (copyFromChildId && prev.childrenData?.[copyFromChildId]) {
+        const source = prev.childrenData[copyFromChildId];
+        initialStudyData = {
+          subjects: JSON.parse(JSON.stringify(source.subjects)),
+          week: JSON.parse(JSON.stringify(source.week)),
+          records: {},
+        };
+      }
+
+      const nextChildrenData = {
+        ...(prev.childrenData ?? {}),
+        [memberId]: initialStudyData,
+      };
+
+      return {
+        ...prev,
+        familyMembers: [...(prev.familyMembers ?? []), member],
+        childrenData: nextChildrenData,
+      };
+    });
   };
+
 
   const handleUpdateMember = (id: string, updates: Partial<FamilyMember>) => {
     update((prev) => {

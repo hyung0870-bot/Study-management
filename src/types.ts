@@ -82,6 +82,13 @@ export interface FamilyMember {
   createdAt?: string;
 }
 
+/** 아이별 독립된 학습 데이터 (과목, 주간계획, 매일기록) */
+export interface ChildStudyData {
+  subjects: Subject[];
+  week: Record<WeekdayKey, DaySchedule>;
+  records: Record<DateKey, DailyRecord>;
+}
+
 export type CalendarEventType = 'birthday' | 'trip' | 'anniversary' | 'other';
 
 export type RecurrenceType = 'none' | 'weekly' | 'monthly' | 'yearly';
@@ -119,6 +126,9 @@ export interface AppData {
   geminiApiKey?: string;
   familyMembers?: FamilyMember[];
   calendarEvents?: CalendarEvent[];
+  /** 아이(FamilyMember.id)별 독립된 학습 데이터 저장소 */
+  childrenData?: Record<string, ChildStudyData>;
 }
+
 
 

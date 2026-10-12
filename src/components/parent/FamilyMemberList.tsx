@@ -8,7 +8,7 @@ import type { FamilyMember, FamilyRole } from '../../types';
 
 interface Props {
   members: FamilyMember[];
-  onAddMember: (member: Omit<FamilyMember, 'id' | 'createdAt'>) => void;
+  onAddMember: (member: Omit<FamilyMember, 'id' | 'createdAt'>, copyFromChildId?: string) => void;
   onUpdateMember: (id: string, updates: Partial<FamilyMember>) => void;
   onDeleteMember: (id: string) => void;
 }
@@ -29,10 +29,13 @@ export default function FamilyMemberList({
   const [role, setRole] = useState<FamilyRole>('child');
   const [pin, setPin] = useState('');
   const [avatar, setAvatar] = useState('👦');
+  const [copyFromChildId, setCopyFromChildId] = useState<string>('');
   const [error, setError] = useState('');
 
   // Delete confirm
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const existingChildren = members.filter((m) => m.role === 'child');
 
   const openAdd = () => {
     setEditingMember(null);
@@ -40,9 +43,11 @@ export default function FamilyMemberList({
     setRole('child');
     setPin('');
     setAvatar('👦');
+    setCopyFromChildId(existingChildren[0]?.id || '');
     setError('');
     setSheetOpen(true);
   };
+
 
   const openEdit = (member: FamilyMember) => {
     setEditingMember(member);
@@ -74,15 +79,19 @@ export default function FamilyMemberList({
         avatar,
       });
     } else {
-      onAddMember({
-        name: trimmedName,
-        role,
-        pin,
-        avatar,
-      });
+      onAddMember(
+        {
+          name: trimmedName,
+          role,
+          pin,
+          avatar,
+        },
+        copyFromChildId || undefined,
+      );
     }
     setSheetOpen(false);
   };
+
 
   const memberToDelete = members.find((m) => m.id === deletingId);
 
@@ -287,6 +296,30 @@ export default function FamilyMemberList({
             />
           </Field>
 
+          {/* 신규 아이 등록 시: 기존 아이의 과목/일정 복사 옵션 */}
+          {!editingMember && role === 'child' && existingChildren.length > 0 && (
+            <div className="rounded-xl bg-amber-50 p-2.5 ring-1 ring-amber-200/60 text-xs space-y-1">
+              <label className="font-bold text-amber-900 block">
+                📋 초기 과목 및 일정 계획 설정
+              </label>
+              <select
+                value={copyFromChildId}
+                onChange={(e) => setCopyFromChildId(e.target.value)}
+                className="w-full rounded-lg bg-white border border-slate-200 px-2 py-1.5 text-xs text-ink font-bold"
+              >
+                <option value="">기본 과목/일정으로 새로 시작</option>
+                {existingChildren.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}의 과목 및 주간 시간표 불러와서 시작
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-amber-800">
+                기존 아이의 계획을 불러와서 시작하면 비슷한 시간표나 과목을 손쉽게 수정할 수 있습니다.
+              </p>
+            </div>
+          )}
+
           {error && (
             <p className="animate-shake rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-500">
               {error}
@@ -294,6 +327,7 @@ export default function FamilyMemberList({
           )}
         </div>
       </Sheet>
+
 
       {/* 삭제 확인 Dialog */}
       <ConfirmDialog

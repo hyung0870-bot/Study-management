@@ -17,14 +17,15 @@ const emptyDay = (): DaySchedule => ({
 export function createDefaultData(): AppData {
   const days: WeekdayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
   const week = Object.fromEntries(days.map((d) => [d, emptyDay()])) as Record<WeekdayKey, DaySchedule>;
+  const defaultSubjects = [
+    { id: 'sub-math', name: '수학 기본', category: '수학', color: '#7aa7e8' },
+    { id: 'sub-kor', name: '국어 독해', category: '국어', color: '#f2a07b' },
+    { id: 'sub-eng', name: '영어 단어', category: '영어', color: '#8fcf9e' },
+    { id: 'sub-sci', name: '과학 탐구', category: '과학', color: '#c3a3e6' },
+  ];
   return {
     version: 1,
-    subjects: [
-      { id: 'sub-math', name: '수학 기본', category: '수학', color: '#7aa7e8' },
-      { id: 'sub-kor', name: '국어 독해', category: '국어', color: '#f2a07b' },
-      { id: 'sub-eng', name: '영어 단어', category: '영어', color: '#8fcf9e' },
-      { id: 'sub-sci', name: '과학 탐구', category: '과학', color: '#c3a3e6' },
-    ],
+    subjects: defaultSubjects,
     week,
     records: {},
     parentPin: '0000',
@@ -33,6 +34,13 @@ export function createDefaultData(): AppData {
       { id: 'member-child-1', name: '아이', role: 'child', pin: '1234', avatar: '🎒', createdAt: new Date().toISOString() },
     ],
     calendarEvents: [],
+    childrenData: {
+      'member-child-1': {
+        subjects: defaultSubjects,
+        week,
+        records: {},
+      },
+    },
   };
 }
 
@@ -46,7 +54,7 @@ function sanitize(raw: unknown): AppData {
     subjects: Array.isArray(parsed.subjects)
       ? parsed.subjects.map((s) => ({
           ...s,
-          category: s.category || s.name, // 기본 카테고리가 없으면 활동 이름을 카테고리로
+          category: s.category || s.name,
         }))
       : base.subjects,
     week: { ...base.week, ...(parsed.week ?? {}) },
@@ -60,6 +68,7 @@ function sanitize(raw: unknown): AppData {
           { id: 'member-child-1', name: '아이', role: 'child', pin: '1234', avatar: '🎒', createdAt: new Date().toISOString() },
         ],
     calendarEvents: Array.isArray(parsed.calendarEvents) ? parsed.calendarEvents : [],
+    childrenData: parsed.childrenData ?? {},
   };
 
   for (const key of Object.keys(data.week) as WeekdayKey[]) {
@@ -69,6 +78,20 @@ function sanitize(raw: unknown): AppData {
     d.studies = (d.studies ?? []).map((s) => ({ ...s, start: s.start ?? '16:00', end: s.end ?? '16:30' }));
     data.week[key] = d;
   }
+
+  // 첫 번째 아이의 childrenData가 비어있다면, 기존 루트의 학습 데이터를 첫 번째 아이 데이터로 마이그레이션
+  const firstChild = (data.familyMembers ?? []).find((m) => m.role === 'child');
+  if (firstChild && !data.childrenData?.[firstChild.id]) {
+    data.childrenData = {
+      ...(data.childrenData ?? {}),
+      [firstChild.id]: {
+        subjects: data.subjects,
+        week: data.week,
+        records: data.records,
+      },
+    };
+  }
+
   return data;
 }
 
@@ -85,8 +108,11 @@ interface StoreValue {
   data: AppData;
   syncing: boolean;
   initialLoaded: boolean;
+  selectedChildId: string | null;
+  setSelectedChildId: (id: string | null) => void;
   update: (updater: (prev: AppData) => AppData) => void;
   updateDay: (key: WeekdayKey, updater: (prev: DaySchedule) => DaySchedule) => void;
+  copyFromChild: (sourceChildId: string) => void;
   reset: () => void;
 }
 
@@ -97,6 +123,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(loadLocal);
   const [syncing, setSyncing] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
+
+  // 부모 모드 등에서 선택된 현재 관리 대상 아이 ID
+  const [selectedChildIdState, setSelectedChildIdState] = useState<string | null>(() => {
+    return sessionStorage.getItem('study-notebook:selected-child-id');
+  });
+
+  const setSelectedChildId = useCallback((id: string | null) => {
+    if (id) {
+      sessionStorage.setItem('study-notebook:selected-child-id', id);
+    } else {
+      sessionStorage.removeItem('study-notebook:selected-child-id');
+    }
+    setSelectedChildIdState(id);
+  }, []);
 
   // Firestore 초기 로드가 완료되었는지 여부
   const initialFetchDoneRef = useRef(false);
@@ -132,12 +172,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setInitialLoaded(true);
 
         if (snap.exists()) {
-          // 클라우드 데이터가 존재하면 로컬에 덮어씌움 (클라우드가 최우선 기준)
           const remote = sanitize(snap.data());
           setData(remote);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
         } else {
-          // 신규 가입자(문서 미존재): 기본 데이터로 최초 1회 생성
           const initial = loadLocal();
           setDoc(ref, initial, { merge: true }).catch(console.error);
         }
@@ -157,14 +195,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.uid]);
 
-  // 2) 클라우드 저장 함수 (오직 사용자가 변경/저장을 눌렀을 때만 호출)
+  // 2) 클라우드 저장 함수
   const persistToCloud = useCallback(
     (nextData: AppData) => {
-      // 로컬 스토리지 즉시 캐시
       localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
 
       if (!user) return;
-      // 초기 클라우드 데이터 로딩 전에는 쓰기 작업 절대 금지 (덮어쓰기 원천 차단)
       if (!initialFetchDoneRef.current) return;
 
       setSyncing(true);
@@ -175,7 +211,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       saveTimeoutRef.current = setTimeout(async () => {
         try {
           const ref = doc(db, 'users', user.uid);
-          // Firestore는 undefined 필드가 포함되면 에러를 발생시키므로 순수 JSON 객체로 정제하여 저장
           const cleanData = JSON.parse(JSON.stringify(nextData));
           await setDoc(ref, cleanData);
         } catch (err) {
@@ -188,33 +223,104 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
-  // 3) 사용자 변경 트리거 (update, updateDay, reset)
+  // 3) 사용자 변경 트리거 (update, updateDay, copyFromChild, reset)
   const update = useCallback(
     (updater: (prev: AppData) => AppData) => {
       setData((prev) => {
         const next = updater(prev);
+        // 만약 특정 아이가 선택된 상태라면, 해당 아이의 childrenData[selectedChildId]에도 동기화
+        const activeChildId =
+          selectedChildIdState ||
+          (next.familyMembers ?? []).find((m) => m.role === 'child')?.id;
+
+        if (activeChildId) {
+          const nextChildrenData = {
+            ...(next.childrenData ?? {}),
+            [activeChildId]: {
+              subjects: next.subjects,
+              week: next.week,
+              records: next.records,
+            },
+          };
+          next.childrenData = nextChildrenData;
+        }
+
         persistToCloud(next);
         return next;
       });
     },
-    [persistToCloud],
+    [persistToCloud, selectedChildIdState],
   );
 
   const updateDay = useCallback(
     (key: WeekdayKey, updater: (prev: DaySchedule) => DaySchedule) => {
       setData((prev) => {
-        const next = {
-          ...prev,
-          week: {
-            ...prev.week,
-            [key]: updater(prev.week[key]),
-          },
+        const nextWeek = {
+          ...prev.week,
+          [key]: updater(prev.week[key]),
         };
+        const next: AppData = {
+          ...prev,
+          week: nextWeek,
+        };
+
+        const activeChildId =
+          selectedChildIdState ||
+          (next.familyMembers ?? []).find((m) => m.role === 'child')?.id;
+
+        if (activeChildId) {
+          const nextChildrenData = {
+            ...(next.childrenData ?? {}),
+            [activeChildId]: {
+              subjects: next.subjects,
+              week: nextWeek,
+              records: next.records,
+            },
+          };
+          next.childrenData = nextChildrenData;
+        }
+
         persistToCloud(next);
         return next;
       });
     },
-    [persistToCloud],
+    [persistToCloud, selectedChildIdState],
+  );
+
+  // 다른 아이의 과목/주간일정 정보를 현재 선택된 아이에게 복사/불러오기
+  const copyFromChild = useCallback(
+    (sourceChildId: string) => {
+      setData((prev) => {
+        const sourceData = prev.childrenData?.[sourceChildId];
+        if (!sourceData) return prev;
+
+        const activeChildId =
+          selectedChildIdState ||
+          (prev.familyMembers ?? []).find((m) => m.role === 'child')?.id;
+
+        const next: AppData = {
+          ...prev,
+          subjects: JSON.parse(JSON.stringify(sourceData.subjects)),
+          week: JSON.parse(JSON.stringify(sourceData.week)),
+        };
+
+        if (activeChildId) {
+          const existingRecords = prev.childrenData?.[activeChildId]?.records ?? prev.records;
+          next.childrenData = {
+            ...(next.childrenData ?? {}),
+            [activeChildId]: {
+              subjects: next.subjects,
+              week: next.week,
+              records: existingRecords,
+            },
+          };
+        }
+
+        persistToCloud(next);
+        return next;
+      });
+    },
+    [persistToCloud, selectedChildIdState],
   );
 
   const reset = useCallback(() => {
@@ -242,7 +348,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <StoreContext.Provider value={{ data, syncing, initialLoaded, update, updateDay, reset }}>
+    <StoreContext.Provider
+      value={{
+        data,
+        syncing,
+        initialLoaded,
+        selectedChildId: selectedChildIdState,
+        setSelectedChildId,
+        update,
+        updateDay,
+        copyFromChild,
+        reset,
+      }}
+    >
       {children}
     </StoreContext.Provider>
   );

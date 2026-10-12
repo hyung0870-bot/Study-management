@@ -42,15 +42,43 @@ import { useStore } from './store/StoreContext';
 import type { FamilyMember } from './types';
 
 function MainApp() {
-  const { data } = useStore();
+  const { data, update, selectedChildId, setSelectedChildId } = useStore();
   const { activeMember, setActiveMember, unlock } = useParentAuth();
 
   const handleSelectMember = (member: FamilyMember) => {
     setActiveMember(member);
     if (member.role === 'parent') {
       unlock(member);
+      // 부모인 경우: 이전에 보던 아이가 없으면 첫 번째 아이로 설정
+      const children = (data.familyMembers ?? []).filter((m) => m.role === 'child');
+      const targetChildId = selectedChildId || children[0]?.id;
+      if (targetChildId) {
+        setSelectedChildId(targetChildId);
+        const childData = data.childrenData?.[targetChildId];
+        if (childData) {
+          update((prev) => ({
+            ...prev,
+            subjects: childData.subjects,
+            week: childData.week,
+            records: childData.records,
+          }));
+        }
+      }
+    } else {
+      // 아이 본인인 경우: 본인 ID로 타겟 아이 설정 및 본인 데이터 로드
+      setSelectedChildId(member.id);
+      const childData = data.childrenData?.[member.id];
+      if (childData) {
+        update((prev) => ({
+          ...prev,
+          subjects: childData.subjects,
+          week: childData.week,
+          records: childData.records,
+        }));
+      }
     }
   };
+
 
   if (!activeMember) {
     return (
