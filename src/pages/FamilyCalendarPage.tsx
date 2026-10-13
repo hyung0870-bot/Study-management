@@ -27,7 +27,7 @@ const HEAD = ['월', '화', '수', '목', '금', '토', '일'];
 
 const TYPE_CONFIG: Record<
   CalendarEventType,
-  { label: string; icon: string; tagBg: string; text: string; dot: string }
+  { label: string; icon: string; tagBg: string; text: string; dot: string; barBg: string }
 > = {
   birthday: {
     label: '생일',
@@ -35,6 +35,7 @@ const TYPE_CONFIG: Record<
     tagBg: 'bg-rose-50 text-rose-700 ring-rose-200/60',
     text: 'text-rose-600',
     dot: 'bg-rose-500',
+    barBg: 'bg-rose-500 text-white',
   },
   trip: {
     label: '여행일정',
@@ -42,6 +43,7 @@ const TYPE_CONFIG: Record<
     tagBg: 'bg-sky-50 text-sky-700 ring-sky-200/60',
     text: 'text-sky-600',
     dot: 'bg-sky-500',
+    barBg: 'bg-sky-500 text-white',
   },
   anniversary: {
     label: '기념일',
@@ -49,6 +51,7 @@ const TYPE_CONFIG: Record<
     tagBg: 'bg-amber-50 text-amber-700 ring-amber-200/60',
     text: 'text-amber-600',
     dot: 'bg-amber-500',
+    barBg: 'bg-amber-500 text-white',
   },
   other: {
     label: '기타',
@@ -56,6 +59,7 @@ const TYPE_CONFIG: Record<
     tagBg: 'bg-indigo-50 text-indigo-700 ring-indigo-200/60',
     text: 'text-indigo-600',
     dot: 'bg-indigo-500',
+    barBg: 'bg-indigo-500 text-white',
   },
 };
 
@@ -74,17 +78,89 @@ export default function FamilyCalendarPage() {
   const events = data.calendarEvents ?? [];
   const members = data.familyMembers ?? [];
 
-  // 날짜 그리드 계산
-  const cells = useMemo(() => {
+  // 주(Week) 단위 행 및 연속 이벤트 바(Segment) 계산
+  const weekRows = useMemo(() => {
     const y = cursor.getFullYear();
     const m = cursor.getMonth();
     const lead = (new Date(y, m, 1).getDay() + 6) % 7; // 월요일 시작 (0 = 월)
     const days = new Date(y, m + 1, 0).getDate();
-    const arr: (Date | null)[] = Array(lead).fill(null);
-    for (let d = 1; d <= days; d++) arr.push(new Date(y, m, d));
-    while (arr.length % 7) arr.push(null);
-    return arr;
-  }, [cursor]);
+    const allDays: (Date | null)[] = Array(lead).fill(null);
+    for (let d = 1; d <= days; d++) allDays.push(new Date(y, m, d));
+    while (allDays.length % 7) allDays.push(null);
+
+    const rows: {
+      days: (Date | null)[];
+      segments: {
+        event: CalendarEvent;
+        colStart: number; // 0 ~ 6
+        span: number; // 1 ~ 7
+        isStartEdge: boolean;
+        isEndEdge: boolean;
+      }[];
+    }[] = [];
+
+    for (let i = 0; i < allDays.length; i += 7) {
+      const weekDays = allDays.slice(i, i + 7);
+      const weekSegments: {
+        event: CalendarEvent;
+        colStart: number;
+        span: number;
+        isStartEdge: boolean;
+        isEndEdge: boolean;
+      }[] = [];
+
+      // 이번 주에 일치하는 활성 이벤트 필터링
+      const activeEvents = events.filter((ev) =>
+        typeFilter === 'all' ? true : ev.type === typeFilter,
+      );
+
+      for (const ev of activeEvents) {
+        let colStart = -1;
+        let colEnd = -1;
+
+        for (let col = 0; col < 7; col++) {
+          const d = weekDays[col];
+          if (!d) continue;
+          const k = toDateKey(d);
+          if (isEventOccurringOnDate(ev, k)) {
+            if (colStart === -1) colStart = col;
+            colEnd = col;
+          }
+        }
+
+        if (colStart !== -1 && colEnd !== -1) {
+          const startDay = weekDays[colStart];
+          const endDay = weekDays[colEnd];
+          const startKey = startDay ? toDateKey(startDay) : '';
+          const endKey = endDay ? toDateKey(endDay) : '';
+
+          const isStartEdge = !ev.startDate || startKey === ev.startDate;
+          const isEndEdge = !ev.endDate || endKey === ev.endDate;
+
+          weekSegments.push({
+            event: ev,
+            colStart,
+            span: colEnd - colStart + 1,
+            isStartEdge,
+            isEndEdge,
+          });
+        }
+      }
+
+      // 이벤트 시작일 및 기간순 정렬
+      weekSegments.sort((a, b) => {
+        if (a.colStart !== b.colStart) return a.colStart - b.colStart;
+        return b.span - a.span;
+      });
+
+      rows.push({
+        days: weekDays,
+        segments: weekSegments,
+      });
+    }
+
+    return rows;
+  }, [cursor, events, typeFilter]);
 
   const selKey = toDateKey(selectedDate);
   const todayKey = toDateKey(new Date());
@@ -288,7 +364,7 @@ export default function FamilyCalendarPage() {
         </div>
 
         {/* 요일 헤더 */}
-        <div className="grid grid-cols-7 gap-1 text-center">
+        <div className="grid grid-cols-7 gap-1 text-center mb-1">
           {HEAD.map((h, i) => (
             <span
               key={h}
@@ -299,68 +375,115 @@ export default function FamilyCalendarPage() {
               {h}
             </span>
           ))}
+        </div>
 
-          {/* 일별 날짜 셀 */}
-          {cells.map((d, i) => {
-            if (!d) return <span key={i} />;
-            const key = toDateKey(d);
-            const isToday = key === todayKey;
-            const isSel = key === selKey;
-            const dayEvents = getEventsForDate(key);
-
+        {/* 주(Week)별 행 및 가로 막대(Bar) 일정 표시 */}
+        <div className="space-y-1.5">
+          {weekRows.map((week, weekIdx) => {
+            const visibleSegments = week.segments.slice(0, 3);
+            const hiddenCount = week.segments.length - visibleSegments.length;
 
             return (
-              <button
-                key={i}
-                type="button"
-                onClick={() => setSelectedDate(d)}
-                className={`relative flex min-h-[50px] aspect-square flex-col items-center justify-between p-1 rounded-xl text-xs transition-all ${
-                  isSel
-                    ? 'bg-ink font-bold text-white shadow-xs'
-                    : isToday
-                      ? 'ring-2 ring-accent/60 font-bold bg-accent/5 text-ink'
-                      : 'hover:bg-slate-50 text-ink'
-                }`}
+              <div
+                key={weekIdx}
+                className="rounded-xl border border-slate-100 bg-slate-50/40 p-1 transition hover:bg-slate-50/70"
               >
-                <span className="text-xs">{d.getDate()}</span>
+                {/* 1. 날짜 번호 행 */}
+                <div className="grid grid-cols-7 gap-1 mb-1">
+                  {week.days.map((d, colIdx) => {
+                    if (!d) return <div key={colIdx} className="h-6" />;
+                    const key = toDateKey(d);
+                    const isToday = key === todayKey;
+                    const isSel = key === selKey;
 
-                {/* 일정 도트 또는 미니 배지 */}
-                <div className="flex w-full flex-wrap justify-center gap-0.5 my-auto max-h-4 overflow-hidden">
-                  {dayEvents.slice(0, 3).map((ev) => {
-                    const cfg = TYPE_CONFIG[ev.type] || TYPE_CONFIG.other;
                     return (
-                      <span
-                        key={ev.id}
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          isSel ? 'bg-white' : cfg.dot
+                      <button
+                        key={colIdx}
+                        type="button"
+                        onClick={() => setSelectedDate(d)}
+                        className={`flex h-6 items-center justify-center rounded-lg text-xs transition-all ${
+                          isSel
+                            ? 'bg-ink font-bold text-white shadow-xs'
+                            : isToday
+                            ? 'bg-accent/15 font-bold text-accent ring-1 ring-accent'
+                            : 'text-ink hover:bg-white'
                         }`}
-                        title={ev.title}
-                      />
+                      >
+                        {d.getDate()}
+                      </button>
                     );
                   })}
-                  {dayEvents.length > 3 && (
-                    <span className={`text-[8px] leading-none ${isSel ? 'text-white' : 'text-ink-soft'}`}>
-                      +
-                    </span>
+                </div>
+
+                {/* 2. 가로 Bar 일정 목록 (최대 3줄) */}
+                <div className="space-y-1 min-h-[22px]">
+                  {visibleSegments.map((seg) => {
+                    const cfg = TYPE_CONFIG[seg.event.type] || TYPE_CONFIG.other;
+                    const isSingleDay = seg.span === 1;
+
+                    return (
+                      <div
+                        key={seg.event.id + '-' + seg.colStart}
+                        className="grid grid-cols-7 gap-1"
+                      >
+                        <div
+                          style={{
+                            gridColumnStart: seg.colStart + 1,
+                            gridColumnEnd: `span ${seg.span}`,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEdit(seg.event);
+                            }}
+                            title={`${seg.event.title} (${cfg.label})`}
+                            className={`flex w-full items-center gap-1 px-1.5 py-0.5 text-[11px] font-semibold transition hover:opacity-90 active:scale-[0.99] text-left truncate shadow-2xs ${cfg.barBg} ${
+                              isSingleDay
+                                ? 'rounded-md'
+                                : `${seg.isStartEdge ? 'rounded-l-md' : 'rounded-l-xs'} ${
+                                    seg.isEndEdge ? 'rounded-r-md' : 'rounded-r-xs'
+                                  }`
+                            }`}
+                          >
+                            <span className="shrink-0 text-[10px] leading-none">{cfg.icon}</span>
+                            <span className="truncate">{seg.event.title}</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {hiddenCount > 0 && (
+                    <div className="text-right px-1">
+                      <span className="text-[10px] font-bold text-ink-muted">
+                        +{hiddenCount}개 일정 더보기
+                      </span>
+                    </div>
+                  )}
+
+                  {week.segments.length === 0 && (
+                    <div className="h-1" />
                   )}
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
 
         <div className="mt-3 flex flex-wrap justify-center gap-3 text-[11px] text-ink-soft border-t border-slate-100 pt-2.5">
           <span className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-rose-500" /> 생일
+            <span className="h-2.5 w-5 rounded-xs bg-rose-500" /> 생일
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-sky-500" /> 여행
+            <span className="h-2.5 w-5 rounded-xs bg-sky-500" /> 여행
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-amber-500" /> 기념일
+            <span className="h-2.5 w-5 rounded-xs bg-amber-500" /> 기념일
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-indigo-500" /> 기타
+            <span className="h-2.5 w-5 rounded-xs bg-indigo-500" /> 기타
           </span>
         </div>
       </div>
