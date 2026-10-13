@@ -6,6 +6,7 @@ import MonthCalendar from '../components/calendar/MonthCalendar';
 import SpecialMissionModal from '../components/parent/SpecialMissionModal';
 import PinGateModal from '../components/parent/PinGateModal';
 import DayMessageCard from '../components/today/DayMessageCard';
+import TodayPointsSection from '../components/today/TodayPointsSection';
 import { useStore } from '../store/StoreContext';
 import { useParentAuth } from '../store/ParentAuth';
 import { formatKoreanDate, toDateKey, uid } from '../lib/date';
@@ -343,6 +344,13 @@ export default function TodayPage() {
         parentMessage={record?.parentMessage}
         onSaveChildMessage={handleSaveChildMessage}
         onSaveParentMessage={handleSaveParentMessage}
+        onRequestParentAuth={() => setPinOpen(true)}
+      />
+
+      {/* 상점 / 벌점 부여 & 보상 구매 섹션 */}
+      <TodayPointsSection
+        dateKey={selKey}
+        isToday={status === 'today'}
         onRequestParentAuth={() => setPinOpen(true)}
       />
 

@@ -31,6 +31,22 @@ export function createDefaultData(): AppData {
     { id: 'sub-eng', name: '영어 단어', category: '영어', color: '#8fcf9e' },
     { id: 'sub-sci', name: '과학 탐구', category: '과학', color: '#c3a3e6' },
   ];
+  const defaultPointRules = [
+    { id: 'rule-bonus-1', title: '스스로 책상 정리하기', type: 'bonus' as const, points: 5, category: '생활습관' },
+    { id: 'rule-bonus-2', title: '독서 30분 집중해서 읽기', type: 'bonus' as const, points: 10, category: '학습/독서' },
+    { id: 'rule-bonus-3', title: '신발 가지런히 정리 및 인사하기', type: 'bonus' as const, points: 5, category: '예절' },
+    { id: 'rule-bonus-4', title: '부모님 심부름 돕기', type: 'bonus' as const, points: 10, category: '생활습관' },
+    { id: 'rule-penalty-1', title: '약속된 게임/스마트폰 시간 초과', type: 'penalty' as const, points: 5, category: '생활습관' },
+    { id: 'rule-penalty-2', title: '장난감/책 안 치우고 방치하기', type: 'penalty' as const, points: 5, category: '정리정돈' },
+    { id: 'rule-penalty-3', title: '투정 부리거나 짜증내기', type: 'penalty' as const, points: 5, category: '예절' },
+  ];
+  const defaultRewardItems = [
+    { id: 'reward-1', title: '자유 게임 시간 30분', price: 20, description: '주말 또는 저녁에 추가 게임 30분 쿠폰' },
+    { id: 'reward-2', title: '좋아하는 간식 사먹기 (편의점/아이스크림)', price: 30, description: '원하는 간식 골라먹기' },
+    { id: 'reward-3', title: '원하는 책 또는 학용품 선물', price: 50, description: '읽고 싶었던 책이나 예쁜 문구류' },
+    { id: 'reward-4', title: '주말 외식 메뉴 결정권', price: 100, description: '가족 외식 메뉴를 내가 직접 선택' },
+  ];
+
   return {
     version: 1,
     subjects: defaultSubjects,
@@ -42,6 +58,9 @@ export function createDefaultData(): AppData {
       { id: 'member-child-1', name: '아이', role: 'child', pin: '1234', avatar: '🎒', createdAt: new Date().toISOString() },
     ],
     calendarEvents: [],
+    pointRules: defaultPointRules,
+    rewardItems: defaultRewardItems,
+    pointLogs: [],
     childrenData: {
       'member-child-1': {
         subjects: defaultSubjects,
@@ -76,6 +95,13 @@ function sanitize(raw: unknown): AppData {
           { id: 'member-child-1', name: '아이', role: 'child', pin: '1234', avatar: '🎒', createdAt: new Date().toISOString() },
         ],
     calendarEvents: Array.isArray(parsed.calendarEvents) ? parsed.calendarEvents : [],
+    pointRules: Array.isArray(parsed.pointRules) && parsed.pointRules.length > 0
+      ? parsed.pointRules
+      : base.pointRules,
+    rewardItems: Array.isArray(parsed.rewardItems) && parsed.rewardItems.length > 0
+      ? parsed.rewardItems
+      : base.rewardItems,
+    pointLogs: Array.isArray(parsed.pointLogs) ? parsed.pointLogs : [],
     childrenData: parsed.childrenData ?? {},
   };
 

@@ -214,8 +214,17 @@ export default function ParentPage() {
 
       {/* 바로가기 메뉴 */}
       <div className="mb-4 paper-card space-y-1.5 p-3">
-        <p className="px-1 text-xs font-bold text-ink-soft">주요 관리 메뉴 바로가기</p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <button
+            type="button"
+            onClick={() => navigate('/points')}
+            className="flex flex-col items-start rounded-xl bg-amber-50/70 border border-amber-200/60 p-2.5 text-left transition-colors hover:bg-amber-100/70"
+          >
+            <span className="text-xl mb-1">⭐</span>
+            <p className="text-xs font-bold text-amber-950">상점/벌점 관리</p>
+            <p className="text-[10px] text-amber-800">항목 및 보상 편집</p>
+          </button>
+
           <button
             type="button"
             onClick={() => navigate('/family-calendar')}

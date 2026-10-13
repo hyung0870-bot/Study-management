@@ -124,6 +124,35 @@ export interface UpdateMetadata {
   summary: string;
 }
 
+/** [F] 상점 / 벌점 규칙 항목 */
+export interface PointRule {
+  id: string;
+  title: string;
+  type: 'bonus' | 'penalty'; // 'bonus': 상점 (+), 'penalty': 벌점 (-)
+  points: number; // 점수 크기 (양수 값, 예: 5)
+  category?: string; // 분류 (예: 생활습관, 독서, 예절 등)
+}
+
+/** [G] 보상/상품 구매 항목 */
+export interface RewardItem {
+  id: string;
+  title: string;
+  price: number; // 필요 상점 (점수)
+  description?: string;
+}
+
+/** [H] 상점/벌점 부여 및 사용(구매) 기록 */
+export interface PointLog {
+  id: string;
+  date: DateKey; // 'YYYY-MM-DD'
+  timestamp: string; // ISO string
+  type: 'bonus' | 'penalty' | 'reward_purchase';
+  title: string; // 항목명
+  points: number; // 실제 가감 점수: bonus(+N), penalty(-N), reward_purchase(-N)
+  giverName?: string; // 부여한 사람 (예: 부모님)
+  childId?: string; // 대상 아이 ID
+}
+
 export interface AppData {
   version: 1;
   subjects: Subject[];
@@ -135,6 +164,12 @@ export interface AppData {
   calendarEvents?: CalendarEvent[];
   /** 아이(FamilyMember.id)별 독립된 학습 데이터 저장소 */
   childrenData?: Record<string, ChildStudyData>;
+  /** 상점 / 벌점 규칙 항목 목록 */
+  pointRules?: PointRule[];
+  /** 구매 가능한 보상 목록 */
+  rewardItems?: RewardItem[];
+  /** 상점/벌점 부여 및 구매 내역 로그 (아이별 or 공통) */
+  pointLogs?: PointLog[];
   /** 타 기기 실시간 업데이트 감지용 메타데이터 */
   lastUpdatedBy?: UpdateMetadata;
 }

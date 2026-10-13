@@ -12,6 +12,7 @@ import FamilyCalendarPage from './pages/FamilyCalendarPage';
 import PlannerPage from './pages/PlannerPage';
 import DayDetailPage from './pages/DayDetailPage';
 import SubjectsPage from './pages/SubjectsPage';
+import PointsPage from './pages/PointsPage';
 import ParentPage from './pages/ParentPage';
 
 import { useEffect } from 'react';
@@ -86,6 +87,7 @@ function MainApp() {
           <Route path="family-calendar" element={<FamilyCalendarPage />} />
           <Route path="planner" element={<PlannerPage />} />
           <Route path="planner/:day" element={<DayDetailPage />} />
+          <Route path="points" element={<PointsPage />} />
           <Route path="subjects" element={<SubjectsPage />} />
           <Route path="parent" element={<ParentPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
