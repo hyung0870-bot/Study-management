@@ -151,6 +151,24 @@ export interface PointLog {
   points: number; // 실제 가감 점수: bonus(+N), penalty(-N), reward_purchase(-N)
   giverName?: string; // 부여한 사람 (예: 부모님)
   childId?: string; // 대상 아이 ID
+  /** 부모와 합의하여 취소된 내역인지 여부 */
+  cancelled?: boolean;
+  cancelledAt?: string; // 취소된 ISO 시각
+  cancelledReason?: string; // 취소 사유
+}
+
+/** [I] 아이의 상점 요청 항목 */
+export interface PointRequest {
+  id: string;
+  date: DateKey;
+  timestamp: string;
+  ruleId: string;
+  ruleTitle: string;
+  points: number;
+  childId: string;
+  childName: string;
+  status: 'pending' | 'approved' | 'rejected';
+  resolvedAt?: string;
 }
 
 export interface AppData {
@@ -170,6 +188,8 @@ export interface AppData {
   rewardItems?: RewardItem[];
   /** 상점/벌점 부여 및 구매 내역 로그 (아이별 or 공통) */
   pointLogs?: PointLog[];
+  /** 아이의 상점 요청 목록 */
+  pointRequests?: PointRequest[];
   /** 타 기기 실시간 업데이트 감지용 메타데이터 */
   lastUpdatedBy?: UpdateMetadata;
 }

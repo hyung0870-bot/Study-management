@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Award, Plus, Trash2, Pencil, ShoppingBag, Lock, Gift } from 'lucide-react';
+import { Award, Plus, Trash2, Pencil, ShoppingBag, Lock, Gift, RotateCcw } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import PinGateModal from '../components/parent/PinGateModal';
@@ -55,21 +55,21 @@ export default function PointsPage() {
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [allLogs, currentChildId]);
 
-  // 누적 점수 계산
+  // 누적 점수 계산 (취소된 내역 제외)
   const totalBalance = useMemo(() => {
-    return childLogs.reduce((acc, log) => acc + log.points, 0);
+    return childLogs.filter((l) => !l.cancelled).reduce((acc, log) => acc + log.points, 0);
   }, [childLogs]);
 
   const totalEarnedBonus = useMemo(() => {
-    return childLogs.filter((l) => l.type === 'bonus').reduce((acc, l) => acc + l.points, 0);
+    return childLogs.filter((l) => !l.cancelled && l.type === 'bonus').reduce((acc, l) => acc + l.points, 0);
   }, [childLogs]);
 
   const totalPenalties = useMemo(() => {
-    return childLogs.filter((l) => l.type === 'penalty').reduce((acc, l) => acc + Math.abs(l.points), 0);
+    return childLogs.filter((l) => !l.cancelled && l.type === 'penalty').reduce((acc, l) => acc + Math.abs(l.points), 0);
   }, [childLogs]);
 
   const totalUsedRewards = useMemo(() => {
-    return childLogs.filter((l) => l.type === 'reward_purchase').reduce((acc, l) => acc + Math.abs(l.points), 0);
+    return childLogs.filter((l) => !l.cancelled && l.type === 'reward_purchase').reduce((acc, l) => acc + Math.abs(l.points), 0);
   }, [childLogs]);
 
   // 규칙 등록 / 수정 열기
@@ -567,39 +567,58 @@ export default function PointsPage() {
               {childLogs.map((log) => {
                 const isBonus = log.type === 'bonus';
                 const isPenalty = log.type === 'penalty';
+                const isPurchase = log.type === 'reward_purchase';
+                const isCancelled = !!log.cancelled;
 
                 return (
-                  <div key={log.id} className="flex items-center justify-between p-3.5 hover:bg-slate-50/70 transition">
+                  <div
+                    key={log.id}
+                    className={`flex items-center justify-between p-3.5 transition ${
+                      isCancelled ? 'bg-slate-50/80 opacity-60' : 'hover:bg-slate-50/70'
+                    }`}
+                  >
                     <div className="flex items-center gap-3 min-w-0 pr-2">
                       <span
                         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-xs font-bold ${
-                          isBonus
+                          isCancelled
+                            ? 'bg-slate-200 text-slate-500 line-through'
+                            : isBonus
                             ? 'bg-emerald-100 text-emerald-700'
                             : isPenalty
                             ? 'bg-rose-100 text-rose-700'
                             : 'bg-purple-100 text-purple-700'
                         }`}
                       >
-                        {isBonus ? '+' : isPenalty ? '-' : '🎁'}
+                        {isCancelled ? '✕' : isBonus ? '+' : isPenalty ? '-' : '🎁'}
                       </span>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-sm text-ink truncate">{log.title}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`font-bold text-sm text-ink truncate ${isCancelled ? 'line-through text-slate-400' : ''}`}>
+                            {log.title}
+                          </span>
                           <span className="rounded-md bg-slate-100 px-1.5 py-0.2 text-[10px] text-ink-muted shrink-0">
                             {isBonus ? '상점' : isPenalty ? '벌점' : '보상 구매'}
                           </span>
+                          {isCancelled && (
+                            <span className="rounded-md bg-rose-100 px-1.5 py-0.2 text-[10px] font-bold text-rose-700 shrink-0">
+                              구매 취소됨 (상점 복구됨)
+                            </span>
+                          )}
                         </div>
                         <p className="text-[11px] text-ink-soft mt-0.5">
                           {log.date} · {new Date(log.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                          {log.giverName && ` · 부여: ${log.giverName}`}
+                          {log.giverName && ` · ${log.giverName}`}
+                          {log.cancelledReason && ` · 취소사유: ${log.cancelledReason}`}
                         </p>
                       </div>
                     </div>
 
-                    <div className="shrink-0 text-right">
+                    <div className="shrink-0 flex items-center gap-2">
                       <span
                         className={`font-hand text-lg font-extrabold ${
-                          isBonus
+                          isCancelled
+                            ? 'text-slate-400 line-through'
+                            : isBonus
                             ? 'text-emerald-600'
                             : isPenalty
                             ? 'text-rose-600'
@@ -608,6 +627,50 @@ export default function PointsPage() {
                       >
                         {log.points > 0 ? `+${log.points}` : log.points}점
                       </span>
+
+                      {unlocked && (
+                        <div className="flex items-center gap-1 ml-1">
+                          {isPurchase && !isCancelled && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const reason = window.prompt(
+                                  `[${log.title}] 구매를 취소하시겠습니까?\n차감되었던 ${Math.abs(log.points)}점이 상점으로 즉시 환불(복구)됩니다.\n\n취소 사유:`,
+                                  '아이와 상의 후 취소',
+                                );
+                                if (reason === null) return;
+                                update((prev) => ({
+                                  ...prev,
+                                  pointLogs: (prev.pointLogs ?? []).map((l) =>
+                                    l.id === log.id
+                                      ? { ...l, cancelled: true, cancelledAt: new Date().toISOString(), cancelledReason: reason || '부모 합의 취소' }
+                                      : l,
+                                  ),
+                                }), `[${log.title}] 구매가 취소되어 상점 ${Math.abs(log.points)}점이 복구되었습니다. 🔄`);
+                              }}
+                              className="flex items-center gap-0.5 rounded-lg bg-purple-50 px-2 py-1 text-xs font-bold text-purple-700 hover:bg-purple-100 transition"
+                              title="아이와 합의 후 구매 취소 및 상점 복구"
+                            >
+                              <RotateCcw size={11} />
+                              <span>구매 취소</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!window.confirm('이 기록을 완전히 삭제하시겠습니까?')) return;
+                              update((prev) => ({
+                                ...prev,
+                                pointLogs: (prev.pointLogs ?? []).filter((l) => l.id !== log.id),
+                              }), '기록이 삭제되었습니다.');
+                            }}
+                            className="text-xs text-slate-400 hover:text-rose-600 px-1.5 py-0.5"
+                            title="기록 영구 삭제"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

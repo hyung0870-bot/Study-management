@@ -61,6 +61,7 @@ export function createDefaultData(): AppData {
     pointRules: defaultPointRules,
     rewardItems: defaultRewardItems,
     pointLogs: [],
+    pointRequests: [],
     childrenData: {
       'member-child-1': {
         subjects: defaultSubjects,
@@ -102,6 +103,7 @@ function sanitize(raw: unknown): AppData {
       ? parsed.rewardItems
       : base.rewardItems,
     pointLogs: Array.isArray(parsed.pointLogs) ? parsed.pointLogs : [],
+    pointRequests: Array.isArray(parsed.pointRequests) ? parsed.pointRequests : [],
     childrenData: parsed.childrenData ?? {},
   };
 
