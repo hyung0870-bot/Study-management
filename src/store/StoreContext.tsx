@@ -229,10 +229,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     initialFetchDoneRef.current = false;
     const ref = doc(db, 'users', user.uid);
 
-    // 네트워크 지연/오프라인 대비 타임아웃 (3초)
+    // 네트워크 지연/오프라인 대비 타임아웃 (3초): 화면만 띄우고, 서버 데이터를 받기 전까지 클라우드 저장은 막는다
+    // (받기 전 로컬 기본값으로 저장하면 클라우드의 가족 데이터를 통째로 덮어쓴다)
     const fallbackTimer = setTimeout(() => {
       if (!initialFetchDoneRef.current) {
-        initialFetchDoneRef.current = true;
         setInitialLoaded(true);
         setSyncing(false);
       }
@@ -316,7 +316,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
           setData(remote);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
-        } else {
+        } else if (!snap.metadata.fromCache) {
+          // 서버가 "문서 없음"이라고 확인한 경우에만 새 계정으로 보고 만든다 (오프라인 캐시의 "없음"은 믿지 않음)
           initialFetchDoneRef.current = true;
           setInitialLoaded(true);
           const initial = loadLocal();
@@ -326,7 +327,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       (error) => {
         console.error('Firestore snapshot error:', error);
         clearTimeout(fallbackTimer);
-        initialFetchDoneRef.current = true;
         setInitialLoaded(true);
         setSyncing(false);
       },

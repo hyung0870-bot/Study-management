@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { browserLocalPersistence, getAuth, setPersistence } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { initializeFirestore, memoryLocalCache } from 'firebase/firestore';
 
 // Firebase 웹 설정값 (공개되어도 괜찮은 값 - 실제 보안은 Firestore 보안 규칙이 담당)
 const firebaseConfig = {
@@ -19,7 +19,8 @@ export const auth = getAuth(app);
 // 한 번 로그인하면 브라우저를 닫아도 계속 로그인 유지
 setPersistence(auth, browserLocalPersistence);
 
-// 오프라인에서도 동작하고, 다시 연결되면 자동 동기화
+// IndexedDB 영구 캐시는 Safari(iOS)에서 서버 데이터를 못 받고 멈추는 일이 있어 메모리 캐시를 쓴다.
+// 화면용 오프라인 사본은 StoreContext가 localStorage에 따로 보관한다.
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  localCache: memoryLocalCache(),
 });
